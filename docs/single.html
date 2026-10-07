@@ -1,0 +1,1880 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>格子摆放辅助器（单文件版）</title>
+<!-- 单文件版：样式与脚本已全部内联，双击即可运行 -->
+<style>
+/* 格子摆放辅助器 —— 样式 */
+* { box-sizing: border-box; }
+:root {
+  --bg: #0f1218;
+  --panel: #171b24;
+  --panel2: #1e2330;
+  --line: #2e3646;
+  --text: #e9edf6;
+  --muted: #98a2b8;
+  --accent: #4f8cff;
+  --accent2: #3ecf8e;
+  --warn: #ffb454;
+  --open: #2b3345;
+}
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 14px/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  overflow: hidden;
+}
+#app { display: flex; height: 100vh; }
+
+/* ---------------- 左侧面板 ---------------- */
+#panel {
+  width: 382px; flex: 0 0 382px; background: var(--panel);
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; min-height: 0;
+}
+#panelHead { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+#panelHead h1 { margin: 0; font-size: 16px; letter-spacing: .5px; }
+#panelHead p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+#panelBody { overflow: auto; padding: 12px 14px 30px; flex: 1; min-height: 0; }
+
+.sec {
+  background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;
+}
+.sec > h2 {
+  margin: 0 0 9px; font-size: 13px; color: var(--muted);
+  font-weight: 600; letter-spacing: .4px;
+  display: flex; align-items: center; gap: 8px;
+}
+.count-badge {
+  font-size: 11px; font-weight: 400; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 20px; padding: 0 8px;
+}
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.row + .row { margin-top: 8px; }
+.row.tagline { margin-top: 9px; }
+label.f { display: flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+input[type=number] {
+  width: 58px; background: #12161f; color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
+}
+input[type=text] {
+  flex: 1; min-width: 60px; background: #12161f; color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px;
+}
+input[type=color] {
+  width: 30px; height: 28px; padding: 0; border: 1px solid var(--line);
+  background: #12161f; border-radius: 6px; cursor: pointer;
+}
+input[type=checkbox] { accent-color: var(--accent); }
+select {
+  background: #12161f; color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 6px; max-width: 210px;
+}
+button {
+  background: #28313f; color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 5px 10px; font-size: 13px; cursor: pointer;
+  transition: .12s;
+}
+button:hover { background: #333d4e; border-color: #46536b; }
+button:active { transform: translateY(1px); }
+button.primary { background: var(--accent); border-color: #3f79e0; color: #fff; font-weight: 600; }
+button.primary:hover { background: #5f98ff; }
+button.big { padding: 8px 18px; font-size: 14px; }
+button.ghost { background: transparent; }
+button.mini { padding: 3px 9px; font-size: 12px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.hint { font-size: 12px; color: var(--muted); margin-top: 7px; }
+.tag {
+  font-size: 12px; color: var(--muted); border: 1px solid var(--line);
+  border-radius: 20px; padding: 2px 10px; white-space: nowrap;
+}
+.tag b { color: var(--text); }
+
+/* 形状库调色板 */
+.pal-btn { display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 5px; font-size: 12px; }
+.pal-btn .mini-grid i { background: #6f7d97; }
+.pal-btn:hover .mini-grid i { background: #9fb0cf; }
+
+/* 迷你形状预览 */
+.mini-grid { display: grid; gap: 1px; }
+.mini-grid i { display: block; width: 5px; height: 5px; background: #55617a; border-radius: 1px; }
+.mini-grid i.on { background: currentColor; }
+.mini-grid.lg i { width: 7px; height: 7px; }
+
+/* 画形状 */
+#drawBox { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+#drawBox summary { cursor: pointer; font-size: 13px; color: var(--muted); outline: none; }
+#drawBox summary:hover { color: var(--text); }
+#drawBox .row { align-items: flex-start; margin-top: 9px; }
+.draw-grid {
+  display: grid; gap: 2px; background: #10141c; padding: 2px;
+  border: 1px solid var(--line); border-radius: 6px;
+  grid-template-columns: repeat(6, 20px); flex: 0 0 auto;
+}
+.draw-grid .dc { width: 20px; height: 20px; background: #1b2130; border-radius: 3px; cursor: pointer; transition: .1s; }
+.draw-grid .dc:hover { background: #263049; }
+.draw-grid .dc.on { background: var(--accent); }
+.draw-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+
+/* 物品行 */
+.item { background: #171d28; border: 1px solid var(--line); border-radius: 9px; padding: 8px 9px; margin-bottom: 8px; }
+.item .top { display: flex; align-items: center; gap: 7px; }
+.item .top input[type=text] { flex: 1; min-width: 40px; }
+.item .desc { font-size: 11px; color: var(--muted); margin-top: 5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.empty-tip { font-size: 12px; color: var(--muted); text-align: center; padding: 14px 6px; border: 1px dashed var(--line); border-radius: 8px; }
+
+/* ---------------- 右侧舞台 ---------------- */
+#stage { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#tabs { display: flex; gap: 6px; padding: 12px 16px 0; align-items: center; }
+#tabs button.on { background: var(--accent); border-color: #3f79e0; color: #fff; font-weight: 600; }
+#tabs .sp { flex: 1; }
+#stageMain {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  min-height: 0; padding: 16px; overflow: auto;
+}
+.view { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.hidden { display: none !important; }
+
+/* 棋盘 */
+#board, #resultGrid { display: grid; gap: 4px; user-select: none; }
+.cell {
+  width: 46px; height: 46px; border-radius: 6px; position: relative;
+  background: var(--open); transition: background .1s, box-shadow .1s;
+}
+.cell.locked {
+  background: repeating-linear-gradient(45deg, #1b2130 0 6px, #151a24 6px 12px);
+  box-shadow: inset 0 0 0 1px #262e3d;
+}
+#board .cell { cursor: pointer; }
+#board .cell:hover { box-shadow: inset 0 0 0 2px var(--accent); }
+.cell .lbl {
+  position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; font-size: 15px; font-weight: 700;
+  color: #0d1117; pointer-events: none;
+}
+.legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); }
+.legend span { display: flex; align-items: center; gap: 6px; }
+.legend .sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.legend .sw.locked { background: repeating-linear-gradient(45deg, #1b2130 0 4px, #151a24 4px 8px); }
+.legend .sw.open { background: var(--open); }
+.legend .sw.piece { background: var(--accent2); }
+
+/* 结果 */
+#resultArea { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
+#resultGrid .cell.filled { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .28); }
+#resultGrid .cell.empty-open { background: #202736; box-shadow: inset 0 0 0 1px #2c3546; }
+.res-head { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.badge { border-radius: 20px; padding: 3px 12px; font-size: 12px; border: 1px solid var(--line); color: var(--muted); }
+.badge.ok { color: #0f1218; background: var(--accent2); border-color: var(--accent2); font-weight: 700; }
+.badge.warn { color: #23180a; background: var(--warn); border-color: var(--warn); font-weight: 700; }
+.badge.info { color: var(--text); }
+.res-pieces { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 780px; }
+.res-piece {
+  display: flex; align-items: center; gap: 7px; font-size: 12px;
+  background: #171d28; border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px;
+}
+.res-piece .dot { width: 10px; height: 10px; border-radius: 3px; }
+.res-piece .n { color: var(--muted); }
+.leftover { font-size: 12px; color: var(--muted); text-align: center; max-width: 700px; }
+.leftover b { color: var(--warn); }
+.err { color: #ffb4b4; background: #35191f; border: 1px solid #6b2b35; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+.busy { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.spinner {
+  width: 14px; height: 14px; border: 2px solid var(--line);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+pre.plan {
+  background: #12161f; border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; font-size: 12px; color: var(--text);
+  max-width: 720px; max-height: 260px; overflow: auto; white-space: pre; margin: 0;
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ======================= 左侧控制台 ======================= -->
+  <aside id="panel">
+    <header id="panelHead">
+      <h1>格子摆放辅助器</h1>
+      <p>解锁格子 · 添加物品 · 求解最优摆放</p>
+    </header>
+
+    <div id="panelBody">
+
+      <!-- 1. 棋盘 -->
+      <section class="sec">
+        <h2>1 · 棋盘与解锁</h2>
+        <div class="row">
+          <label class="f">棋盘边长
+            <select id="boardSize">
+              <option value="5">5 × 5</option>
+              <option value="6" selected>6 × 6</option>
+              <option value="7">7 × 7</option>
+              <option value="8">8 × 8</option>
+              <option value="9">9 × 9</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <button id="presetRing" title="只解锁中间 (边长-2) 的区域，外围一圈锁定">初始：仅中心 <span id="ringLabel">4×4</span></button>
+          <button id="presetAll">全部解锁</button>
+          <button id="presetNone">全部锁定</button>
+        </div>
+        <div class="hint">直接点棋盘上的格子即可切换「已解锁 / 未解锁」。灰色斜纹 = 未解锁，物品不会摆在那里。</div>
+        <div class="row tagline">
+          <span class="tag">已解锁 <b id="statUnlocked">0</b> 格</span>
+          <span class="tag">未解锁 <b id="statLocked">0</b> 格</span>
+        </div>
+      </section>
+
+      <!-- 2. 形状库 -->
+      <section class="sec">
+        <h2>2 · 形状库（含 L 形）</h2>
+        <div class="row" id="palette"></div>
+
+        <details id="drawBox">
+          <summary>自己画一个形状（最多 6×6）</summary>
+          <div class="row">
+            <div id="drawGrid" class="draw-grid"></div>
+            <div class="draw-side">
+              <div class="hint" id="drawInfo">点击格子拼出形状</div>
+              <input type="text" id="drawName" placeholder="物品名称（可留空）" maxlength="12">
+              <div class="row">
+                <button id="drawClear" class="mini ghost">清空</button>
+                <button id="drawTrim" class="mini ghost" title="把形状平移到左上角贴边">贴边</button>
+              </div>
+              <button id="drawAdd" class="primary">加入物品清单</button>
+            </div>
+          </div>
+        </details>
+
+        <div class="row">
+          <label class="f">L 形尺寸
+            <select id="lA">
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+            ×
+            <select id="lB">
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+          <button id="addL" class="mini">加入 L 形</button>
+        </div>
+      </section>
+
+      <!-- 3. 物品清单 -->
+      <section class="sec">
+        <h2>3 · 物品清单 <span class="count-badge" id="typeCount">0 种</span></h2>
+        <div id="typeList"></div>
+        <div class="row">
+          <button id="addRect" class="mini">+ 矩形…</button>
+          <button id="clearTypes" class="mini ghost">清空清单</button>
+        </div>
+        <div class="row tagline">
+          <span class="tag">物品总格数 <b id="statPieceArea">0</b></span>
+          <span class="tag">可摆面积 <b id="statFit">-</b></span>
+        </div>
+      </section>
+
+      <!-- 4. 求解 -->
+      <section class="sec">
+        <h2>4 · 求解</h2>
+        <div class="row">
+          <label class="f">方式
+            <select id="solveMode">
+              <option value="exact" selected>精确（能证明最优，稍慢）</option>
+              <option value="beam">快速（启发式，几乎秒出）</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="f">时间预算
+            <select id="timeLimit">
+              <option value="800">0.8 秒</option>
+              <option value="2000">2 秒</option>
+              <option value="4000" selected>4 秒</option>
+              <option value="8000">8 秒</option>
+              <option value="15000">15 秒</option>
+            </select>
+          </label>
+          <label class="f"><input type="checkbox" id="allowMirror" checked> 允许镜像翻转</label>
+        </div>
+        <div class="row">
+          <button id="solveBtn" class="primary big">开始求解</button>
+          <button id="copyBtn" class="ghost">复制方案</button>
+        </div>
+        <div id="solveStatus" class="hint"></div>
+      </section>
+
+      <!-- 5. 存档 -->
+      <section class="sec">
+        <h2>5 · 存档</h2>
+        <div class="row">
+          <button id="exportBtn" class="mini">导出配置</button>
+          <button id="importBtn" class="mini">导入配置</button>
+          <button id="resetBtn" class="mini ghost">恢复默认</button>
+        </div>
+        <div class="hint">配置会自动保存在浏览器本地，下次打开还在。</div>
+      </section>
+
+    </div>
+  </aside>
+
+  <!-- ======================= 右侧舞台 ======================= -->
+  <main id="stage">
+    <div id="tabs">
+      <button data-view="board" class="on">① 棋盘 / 解锁</button>
+      <button data-view="result">② 摆放结果</button>
+      <span class="sp"></span>
+      <span class="tag" id="hintTag">点格子解锁，右侧看方案</span>
+    </div>
+    <div id="stageMain">
+      <div id="viewBoard" class="view">
+        <div id="board"></div>
+        <div class="legend">
+          <span><i class="sw locked"></i>未解锁</span>
+          <span><i class="sw open"></i>已解锁</span>
+          <span><i class="sw piece"></i>已摆放物品</span>
+        </div>
+      </div>
+      <div id="viewResult" class="view hidden">
+        <div id="resultArea"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/*!
+ * pieces.js —— 形状（多联骨牌）工具库
+ * 负责：形状归一化、旋转/翻转、预设形状（含 L 形）、形状间比较。
+ * 同时兼容浏览器（window.Pieces）与 Node（module.exports）。
+ */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.Pieces = api;
+})(typeof globalThis !== 'undefined' ? globalThis : (typeof self !== 'undefined' ? self : this), function () {
+  'use strict';
+
+  /** 归一化：把格子整体平移到左上角贴边，并按「行优先」排序 */
+  function normalize(cells) {
+    if (!Array.isArray(cells) || cells.length === 0) return [];
+    var minR = Infinity, minC = Infinity, i;
+    for (i = 0; i < cells.length; i++) {
+      if (cells[i][0] < minR) minR = cells[i][0];
+      if (cells[i][1] < minC) minC = cells[i][1];
+    }
+    var out = [];
+    for (i = 0; i < cells.length; i++) out.push([cells[i][0] - minR, cells[i][1] - minC]);
+    out.sort(cmpCell);
+    // 去重
+    var uniq = [];
+    for (i = 0; i < out.length; i++) {
+      if (i === 0 || out[i][0] !== out[i - 1][0] || out[i][1] !== out[i - 1][1]) uniq.push(out[i]);
+    }
+    return uniq;
+  }
+
+  function cmpCell(a, b) { return a[0] - b[0] || a[1] - b[1]; }
+
+  function key(cells) {
+    var s = '';
+    for (var i = 0; i < cells.length; i++) s += cells[i][0] + ',' + cells[i][1] + ';';
+    return s;
+  }
+
+  /** 顺时针旋转 90° */
+  function rotate(cells) {
+    var out = [];
+    for (var i = 0; i < cells.length; i++) out.push([cells[i][1], -cells[i][0]]);
+    return normalize(out);
+  }
+
+  /** 左右镜像 */
+  function mirrorH(cells) {
+    var out = [];
+    for (var i = 0; i < cells.length; i++) out.push([cells[i][0], -cells[i][1]]);
+    return normalize(out);
+  }
+
+  function bounds(cells) {
+    var w = 0, h = 0;
+    for (var i = 0; i < cells.length; i++) {
+      if (cells[i][1] + 1 > w) w = cells[i][1] + 1;
+      if (cells[i][0] + 1 > h) h = cells[i][0] + 1;
+    }
+    return { w: w, h: h };
+  }
+
+  /**
+   * 生成一个形状的所有摆放方向。
+   * @param {number[][]} cells 形状格子
+   * @param {boolean} allowMirror 是否允许镜像（L 形默认允许，可严格只用旋转）
+   * @returns {{cells:number[][], key:string, allowMirror:boolean}[]}
+   */
+  function transforms(cells, allowMirror) {
+    var base = normalize(cells);
+    if (base.length === 0) return [];
+    var seen = Object.create(null), out = [];
+    var variants = allowMirror ? [base, mirrorH(base)] : [base];
+    for (var v = 0; v < variants.length; v++) {
+      var cur = variants[v];
+      for (var r = 0; r < 4; r++) {
+        var k = key(cur);
+        if (!seen[k]) {
+          seen[k] = 1;
+          out.push({ cells: cur, key: k, allowMirror: !!allowMirror });
+        }
+        cur = rotate(cur);
+      }
+    }
+    return out;
+  }
+
+  /** 形状面积（格子数） */
+  function area(cells) { return cells.length; }
+
+  /** 形状外接矩形是否为正方形 */
+  function isSquare(cells) { var b = bounds(cells); return b.w === b.h; }
+
+  /* ------------------------------ 预设形状 ------------------------------ */
+
+  function rect(w, h) {
+    var cells = [];
+    for (var r = 0; r < h; r++) for (var c = 0; c < w; c++) cells.push([r, c]);
+    return cells;
+  }
+
+  /**
+   * L 形：竖臂长 a、横臂长 b（拐角格共用），a、b 均 ≥ 2。
+   * 例：L(3,2) = 竖着 3 格 + 底边向右多 1 格（经典 3 格 L）。
+   */
+  function lShape(a, b) {
+    a = Math.max(2, a | 0); b = Math.max(2, b | 0);
+    var cells = [];
+    for (var r = 0; r < a; r++) cells.push([r, 0]);
+    for (var c = 1; c < b; c++) cells.push([a - 1, c]);
+    return normalize(cells);
+  }
+
+  /** T 形：顶部横梁宽 w，中间竖臂长 h */
+  function tShape(w, h) {
+    w = Math.max(2, w | 0); h = Math.max(2, h | 0);
+    var cells = [], mid = Math.floor((w - 1) / 2);
+    for (var c = 0; c < w; c++) cells.push([0, c]);
+    for (var r = 1; r < h; r++) cells.push([r, mid]);
+    return normalize(cells);
+  }
+
+  /** S/Z 形（默认 2×3 的经典 4 格形状，flip=true 时取镜像） */
+  function sShape(w, h, flip) {
+    w = Math.max(2, w | 0); h = Math.max(2, h | 0);
+    var cells;
+    if (w === 3 && h === 2) {
+      cells = flip ? [[0, 1], [0, 2], [1, 0], [1, 1]] : [[0, 0], [0, 1], [1, 1], [1, 2]];
+    } else {
+      // 通用：上行取左半，之后每行错开
+      cells = [];
+      for (var c = 0; c <= Math.floor((w - 1) / 2); c++) cells.push([0, c]);
+      for (var r = 1; r < h; r++) {
+        for (var d = 0; d < Math.ceil(w / 2); d++) cells.push([r, d + (flip ? 0 : Math.floor((w - 1) / 2))]);
+      }
+    }
+    return normalize(cells);
+  }
+
+  /** 直角三角（阶梯）形 */
+  function stair(n) {
+    n = Math.max(1, n | 0);
+    var cells = [];
+    for (var r = 0; r < n; r++) for (var c = 0; c <= r; c++) cells.push([r, c]);
+    return normalize(cells);
+  }
+
+  /** 预设调色板：供界面「快捷添加」使用 */
+  function presets() {
+    return [
+      { id: 'r1x1', name: '1×1', cells: rect(1, 1) },
+      { id: 'r2x1', name: '1×2', cells: rect(2, 1) },
+      { id: 'r2x2', name: '2×2', cells: rect(2, 2) },
+      { id: 'r3x1', name: '1×3', cells: rect(3, 1) },
+      { id: 'r3x2', name: '2×3', cells: rect(3, 2) },
+      { id: 'r3x3', name: '3×3', cells: rect(3, 3) },
+      { id: 'l3', name: 'L 形(3格)', cells: lShape(2, 2) },
+      { id: 'l4', name: 'L 形(4格)', cells: lShape(3, 2) },
+      { id: 'l5', name: 'L 形(5格)', cells: lShape(4, 2) },
+      { id: 't4', name: 'T 形(4格)', cells: tShape(3, 2) },
+      { id: 's4', name: 'S 形(4格)', cells: sShape(3, 2, false) },
+      { id: 'st6', name: '阶梯(6格)', cells: stair(3) }
+    ];
+  }
+
+  /** 描述形状：如 “5 格 · 4×2” */
+  function describe(cells) {
+    var b = bounds(cells);
+    return cells.length + ' 格 · ' + b.w + '×' + b.h;
+  }
+
+  return {
+    normalize: normalize,
+    rotate: rotate,
+    mirrorH: mirrorH,
+    transforms: transforms,
+    bounds: bounds,
+    area: area,
+    isSquare: isSquare,
+    key: key,
+    rect: rect,
+    lShape: lShape,
+    tShape: tShape,
+    sShape: sShape,
+    stair: stair,
+    presets: presets,
+    describe: describe
+  };
+});
+
+</script>
+<script>
+/*!
+ * solver.js —— 格子摆放求解器
+ * 依赖 pieces.js（浏览器 window.Pieces / Node require('./pieces.js')）。
+ *
+ * 目标：在已解锁的格子里摆放物品（可旋转、可选镜像），使
+ *   1) 放入的格子数最多；
+ *   2) 格数相同时物品件数最少。
+ * 放不下的物品允许剩余，剩余清单随结果返回。
+ *
+ * 算法
+ *   exact —— 分支限界完全搜索，预算内跑完即证明是全局最优；
+ *   beam  —— 束搜索启发式，大盘/复杂实例用，快速给出尽量满的方案。
+ *
+ * 完全性依据：每个状态只处理「行优先扫描到的、还有可能被盖住的第一个空格」。
+ *   · 任何物品都盖不住它  -> 它必然是空洞，直接前进，不算分支；
+ *   · 否则  -> 分支：要么把它当空洞，要么用某个物品以它左上角为锚点盖住它。
+ * 任何合法摆放方案都能被这组操作唯一还原，因此不会漏解；配合上界剪枝即为最优。
+ */
+(function (root, factory) {
+  'use strict';
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.Solver = api;
+})(typeof globalThis !== 'undefined' ? globalThis : (typeof self !== 'undefined' ? self : this), function () {
+  'use strict';
+
+  var DEFAULT_BEAM_WIDTH = 60;
+  var DEFAULT_BEAM_NODES = 120000;
+  var STOP = { stop: true };   // 用于从递归深处快速中断
+
+  function now() {
+    return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  }
+  function piecesLib() {
+    if (typeof self !== 'undefined' && self.Pieces) return self.Pieces;
+    if (typeof globalThis !== 'undefined' && globalThis.Pieces) return globalThis.Pieces;
+    return require('./pieces.js');
+  }
+  /** a 是否严格优于 b */
+  function isBetter(aArea, aCount, bArea, bCount) {
+    if (aArea !== bArea) return aArea > bArea;
+    return aCount < bCount;
+  }
+  function popcount(x) { var n = 0; while (x) { x &= x - 1n; n++; } return n; }
+
+  /** 形状最长直线段（判断能否放进棋盘） */
+  function longestRun(cells) {
+    var seen = Object.create(null), run = 0, i;
+    for (i = 0; i < cells.length; i++) seen[cells[i][0] + ',' + cells[i][1]] = 1;
+    for (i = 0; i < cells.length; i++) {
+      if (!seen[cells[i][0] + ',' + (cells[i][1] - 1)]) {
+        var len = 0, c = cells[i][1];
+        while (seen[cells[i][0] + ',' + c]) { len++; c++; }
+        if (len > run) run = len;
+      }
+      if (!seen[(cells[i][0] - 1) + ',' + cells[i][1]]) {
+        var len2 = 0, r = cells[i][0];
+        while (seen[r + ',' + cells[i][1]]) { len2++; r++; }
+        if (len2 > run) run = len2;
+      }
+    }
+    return run;
+  }
+
+  /**
+   * @param {object} opts
+   *   size      : 棋盘边长
+   *   unlocked  : number[] 已解锁格子索引（r*size+c）
+   *   types     : [{id?, name?, cells, count, allowMirror?}]
+   *   mode      : 'exact' | 'beam'
+   *   timeLimit : 精确搜索时间预算(ms)
+   *   nodeLimit : 精确搜索节点上限
+   *   beamWidth : 束宽
+   */
+  function solve(opts) {
+    var t0 = now();
+    var size = opts.size | 0;
+    if (size < 2 || size > 12) return { ok: false, error: '棋盘边长需在 2 ~ 12 之间' };
+    var totalCells = size * size;
+    var P = piecesLib();
+
+    /* ---------- 1. 可用区域 ---------- */
+    var available = 0n, unlockedList = [], seenIdx = Object.create(null);
+    var raw = opts.unlocked || [];
+    for (var i = 0; i < raw.length; i++) {
+      var idx = raw[i] | 0;
+      if (idx < 0 || idx >= totalCells || seenIdx[idx]) continue;
+      seenIdx[idx] = 1;
+      unlockedList.push(idx);
+      available |= 1n << BigInt(idx);
+    }
+    var availableCells = unlockedList.length;
+    if (availableCells === 0) return { ok: false, error: '请先解锁至少一个格子' };
+
+    /* ---------- 2. 物品类型与摆放方向 ---------- */
+    var types = [], srcTypes = opts.types || [];
+    for (i = 0; i < srcTypes.length; i++) {
+      var t = srcTypes[i];
+      var count = Math.max(0, t.count | 0);
+      if (count === 0 || !t.cells || !t.cells.length) continue;
+      var base = P.normalize(t.cells);
+      var trs = P.transforms(base, t.allowMirror !== false);
+      if (!trs.length) continue;
+      var maxRun = 0;
+      for (var k = 0; k < trs.length; k++) maxRun = Math.max(maxRun, longestRun(trs[k].cells));
+      if (maxRun > size) {
+        return { ok: false, error: '物品「' + (t.name || ('物品' + (i + 1))) + '」的长边超过棋盘边长（' + size + '）' };
+      }
+      types.push({
+        id: t.id || ('t' + i),
+        name: t.name || ('物品' + (i + 1)),
+        area: base.length,
+        cells: base,
+        trs: trs,
+        count: count,
+        maxRun: maxRun
+      });
+    }
+    if (!types.length) return { ok: false, error: '请先添加至少一种物品' };
+    types.sort(function (a, b) { return (b.area - a.area) || (b.count - a.count); });
+
+    var initCounts = types.map(function (x) { return x.count; });
+    var maxDepth = 0, totalPieceArea = 0;
+    for (i = 0; i < types.length; i++) {
+      maxDepth += types[i].count;
+      totalPieceArea += types[i].area * types[i].count;
+    }
+
+    /* ---------- 3. 候选摆放（锚点必须落在可用区域内） ---------- */
+    var candByType = [];
+    for (i = 0; i < types.length; i++) {
+      var list = [];
+      for (var j = 0; j < types[i].trs.length; j++) {
+        var tc = types[i].trs[j];
+        var bw = 0, bh = 0;
+        for (var m = 0; m < tc.cells.length; m++) {
+          if (tc.cells[m][1] + 1 > bw) bw = tc.cells[m][1] + 1;
+          if (tc.cells[m][0] + 1 > bh) bh = tc.cells[m][0] + 1;
+        }
+        // 锚点 = 摆放后形状外接矩形的左上角，遍历棋盘所有可能位置
+        for (var ar = 0; ar + bh <= size; ar++) {
+          for (var ac = 0; ac + bw <= size; ac++) {
+            var mask = 0n, fits = true;
+            for (m = 0; m < tc.cells.length; m++) {
+              var rr = ar + tc.cells[m][0], cc = ac + tc.cells[m][1];
+              var p = rr * size + cc;
+              if (!((available >> BigInt(p)) & 1n)) { fits = false; break; }
+              mask |= 1n << BigInt(p);
+            }
+            if (!fits) continue;
+            list.push({ cells: tc.cells, mask: mask, anchor: ar * size + ac });
+          }
+        }
+      }
+      // 按锚点排序：同一空格只需扫过相邻的候选
+      list.sort(function (a, b) { return a.anchor - b.anchor; });
+      candByType.push(list);
+    }
+
+    /* ---------- 4. 搜索状态 ---------- */
+    var bestArea = -1, bestCount = Infinity, bestPl = null;
+    var nodes = 0, timedOut = false;
+    var timeLimit = opts.timeLimit > 0 ? opts.timeLimit : 4000;
+    var nodeLimit = opts.nodeLimit > 0 ? opts.nodeLimit : 1200000;
+    var checkEvery = 512;
+    var visited = new Map();
+    var leafLimit = Math.max(20000, maxDepth * 12000);
+    var firstRowMask = 0n;
+    for (var fc = 0; fc < size; fc++) firstRowMask |= 1n << BigInt(fc);
+
+    function firstEmpty(used) {
+      var f = available & ~used;
+      if (f === 0n) return -1;
+      for (var p = 0; p < totalCells; p++) if ((f >> BigInt(p)) & 1n) return p;
+      return -1;
+    }
+    /** 从 from 起找第一个空着的可用格 */
+    function firstEmptyFrom(used, from) {
+      var f = available & ~used;
+      if (f === 0n) return -1;
+      for (var p = from; p < totalCells; p++) if ((f >> BigInt(p)) & 1n) return p;
+      return -1;
+    }
+    function shiftCells(cells, anchor) {
+      var r0 = Math.floor(anchor / size), c0 = anchor % size, out = [];
+      for (var q = 0; q < cells.length; q++) out.push([r0 + cells[q][0], c0 + cells[q][1]]);
+      return out;
+    }
+    /** 位置 pos 处能放下的候选列表（同一个方向可能多种摆法） */
+    function fitsAt(pos, ti, used) {
+      var list = candByType[ti], out = [], c;
+      for (c = 0; c < list.length; c++) {
+        if (list[c].anchor !== pos) continue;
+        if ((~used & list[c].mask) === list[c].mask) out.push(list[c]);
+      }
+      return out;
+    }
+    /** pos 是否还能被任何剩余物品盖住 */
+    function coverable(pos, used, cnt) {
+      for (var ti = 0; ti < types.length; ti++) {
+        if (cnt[ti] <= 0) continue;
+        if (fitsAt(pos, ti, used).length) return true;
+      }
+      return false;
+    }
+
+    function updateBest(area, count, pl) {
+      if (bestArea < 0 || isBetter(area, count, bestArea, bestCount)) {
+        bestArea = area; bestCount = count; bestPl = pl;
+        return true;
+      }
+      return false;
+    }
+
+    /* ---------- 5. 启发式下界（多种贪心 + 束搜索） ---------- */
+    function greedy(byAnchorFirst) {
+      var used = 0n, cnt = initCounts.slice(), pl = [], area = 0, guard = 0;
+      while (guard++ <= maxDepth + totalCells + 2) {
+        var pos = firstEmpty(used);
+        if (pos < 0) break;
+        var placedOne = false;
+        for (var ti = 0; ti < types.length && !placedOne; ti++) {
+          if (cnt[ti] <= 0) continue;
+          var fits = fitsAt(pos, ti, used);
+          if (!fits.length) continue;
+          // byAnchorFirst=false 时优先“面积大”的类型（types 已按面积降序）
+          var pick = fits[0];
+          if (!byAnchorFirst && fits.length > 1) {
+            // 选占地面积更“靠上/靠左”的摆法，尽量不留缝
+            pick = fits.reduce(function (a, b) { return (a.mask < b.mask ? a : b); });
+          }
+          used |= pick.mask;
+          cnt[ti]--;
+          area += types[ti].area;
+          pl.push({ t: ti, cells: shiftCells(pick.cells, pos) });
+          placedOne = true;
+        }
+        if (!placedOne) used |= 1n << BigInt(pos);
+      }
+      return { area: area, count: pl.length, placements: pl };
+    }
+
+    (function seed() {
+      var g1 = greedy(false);
+      updateBest(g1.area, g1.count, g1.placements);
+      var g2 = greedy(true);
+      updateBest(g2.area, g2.count, g2.placements);
+    })();
+
+    /* ---------- 6. 精确搜索 ---------- */
+    var mode = opts.mode === 'beam' ? 'beam' : 'exact';
+    var optimal = false;
+    // 启发式已经把可用格全填满 => 面积上不可能更好，直接认定为最优
+    if (bestArea === availableCells) optimal = true;
+    if (mode === 'exact' && !optimal) {
+      try {
+        recurse(0n, availableCells, 0, initCounts, 0, []);
+      } catch (e) {
+        if (e !== STOP) throw e;
+      }
+      optimal = !timedOut && nodes < nodeLimit;
+    }
+
+    /* ---------- 7. 束搜索兜底 ---------- */
+    if (mode !== 'beam' && !optimal) {
+      var b = beamSearch();
+      if (b) updateBest(b.area, b.count, b.placements);
+      mode = 'exact-timeout';
+    } else if (mode === 'beam') {
+      var b2 = beamSearch();
+      if (b2) updateBest(b2.area, b2.count, b2.placements);
+      optimal = (bestArea === availableCells);   // 只有“全填满”才敢说最优
+    }
+    if (bestPl === null) { bestArea = 0; bestCount = 0; bestPl = []; }
+    if (bestArea === availableCells) optimal = true;
+
+    return buildResult(types, availableCells, totalCells, unlockedList.length, {
+      area: bestArea, count: bestCount, placements: bestPl,
+      optimal: optimal, proven: optimal && mode !== 'beam', method: mode, nodes: nodes,
+      ms: now() - t0, timedOut: timedOut
+    });
+
+    /* =================== 精确搜索 =================== */
+    /**
+     * @param used      已占用位图（含空洞与死格）
+     * @param freeCells 还没被占用/放弃的可用格数
+     * @param depth     已放置物品数
+     * @param cnt       各类型剩余数量（调用方传副本）
+     * @param filled    已覆盖格数
+     * @param pl        已放置清单
+     */
+    function recurse(used, freeCells, depth, cnt, filled, pl) {
+      if (bestArea < 0 || isBetter(filled, pl.length, bestArea, bestCount)) {
+        bestArea = filled; bestCount = pl.length; bestPl = pl.slice();
+      }
+      if (depth >= maxDepth || freeCells <= 0) return;
+
+      // 上界：剩余物品全放下也只有这么多
+      var restArea = 0;
+      for (var q = 0; q < cnt.length; q++) if (cnt[q] > 0) restArea += cnt[q] * types[q].area;
+      var ub = filled + (restArea < freeCells ? restArea : freeCells);
+      if (ub < bestArea) return;
+      if (ub === bestArea && pl.length >= bestCount) return;
+
+      nodes++;
+      if ((nodes & (checkEvery - 1)) === 0 && (now() - t0 > timeLimit || nodes > nodeLimit)) {
+        timedOut = true;
+        throw STOP;
+      }
+
+      // 找一个“还有可能被盖住”的空格；中间那些必然成为空洞的格子就地标记并跳过
+      var pos = -1;
+      for (;;) {
+        var next = firstEmpty(used);
+        if (next < 0) return;
+        if (coverable(next, used, cnt)) { pos = next; break; }
+        used |= 1n << BigInt(next);                  // 死格：任何剩余物品都盖不住它
+        freeCells--;
+        if (freeCells <= 0) return;
+      }
+
+      // 同一（占用图 + 剩余清单）最多展开若干次，防止重复爆炸
+      var stateKey = used.toString(36) + '|' + cnt.join(',');
+      var seen = visited.get(stateKey);
+      if (seen === undefined) visited.set(stateKey, 1);
+      else if (seen >= leafLimit) return;
+      else visited.set(stateKey, seen + 1);
+
+      // 分支一：该格当空洞（行内已有更靠左的同花纹空洞时，这次是等价方案，剪掉）
+      if (!inSameRowPattern(used, pos)) {
+        recurse(used | (1n << BigInt(pos)), freeCells - 1, depth, cnt, filled, pl);
+      }
+
+      // 分支二：用某个物品以 pos 为左上角锚点盖住它
+      for (var ti = 0; ti < types.length; ti++) {
+        if (cnt[ti] <= 0) continue;
+        var fits = fitsAt(pos, ti, used);
+        for (var c = 0; c < fits.length; c++) {
+          var cand = fits[c];
+          var cnt2 = cnt.slice();
+          cnt2[ti]--;
+          recurse(used | cand.mask, freeCells - types[ti].area, depth + 1, cnt2,
+            filled + types[ti].area, pl.concat([{ t: ti, cells: shiftCells(cand.cells, pos) }]));
+        }
+      }
+    }
+
+    /**
+     * 对称性判断：pos 所在行、pos 左侧是否已经存在空洞。
+     * 是 -> 本次挖洞与「把洞挪到最左可行位置」的方案等价，可剪枝。
+     */
+    function inSameRowPattern(used, pos) {
+      var r = Math.floor(pos / size), c = pos % size, cc;
+      for (cc = 0; cc < c; cc++) {
+        var q = r * size + cc;
+        if (((available >> BigInt(q)) & 1n) && ((used >> BigInt(q)) & 1n)) return true;
+      }
+      return false;
+    }
+
+    /* =================== 束搜索（启发式） =================== */
+    function beamSearch() {
+      var width = Math.max(8, (opts.beamWidth | 0) || DEFAULT_BEAM_WIDTH);
+      var budget = opts.beamNodes > 0 ? opts.beamNodes : DEFAULT_BEAM_NODES;
+      var beam = [{ used: 0n, depth: 0, cnt: initCounts.slice(), pl: [], area: 0, score: 0 }];
+      var best = null, seen = new Set(), expanded = 0;
+
+      while (beam.length) {
+        var next = [];
+        for (var bi = 0; bi < beam.length; bi++) {
+          var st = beam[bi];
+          if (!best || isBetter(st.area, st.pl.length, best.area, best.count)) {
+            best = { area: st.area, count: st.pl.length, placements: st.pl };
+          }
+          if (st.depth >= maxDepth) continue;
+
+          var pos = -1, scan = 0, usedCur = st.used;
+          for (;;) {
+            var nx = firstEmptyFrom(usedCur, scan);
+            if (nx < 0) break;
+            if (coverable(nx, usedCur, st.cnt)) { pos = nx; break; }
+            usedCur |= 1n << BigInt(nx);
+            scan = nx + 1;
+          }
+          if (pos < 0) continue;
+
+          // 当空洞
+          var usedHole = usedCur | (1n << BigInt(pos));
+          var holeKey = usedHole.toString(36) + '|' + st.cnt.join(',');
+          if (!seen.has(holeKey)) {
+            seen.add(holeKey);
+            next.push({
+              used: usedHole, depth: st.depth, cnt: st.cnt, pl: st.pl, area: st.area,
+              score: st.score - 2
+            });
+          }
+
+          // 放物品
+          for (var ti = 0; ti < types.length; ti++) {
+            if (st.cnt[ti] <= 0) continue;
+            var fits = fitsAt(pos, ti, usedCur);
+            for (var c = 0; c < fits.length; c++) {
+              var cand = fits[c];
+              var used2 = usedCur | cand.mask;
+              var cnt2 = st.cnt.slice();
+              cnt2[ti]--;
+              var key2 = used2.toString(36) + '|' + cnt2.join(',');
+              if (seen.has(key2)) continue;
+              seen.add(key2);
+              var area2 = st.area + types[ti].area;
+              var pl2 = st.pl.concat([{ t: ti, cells: shiftCells(cand.cells, pos) }]);
+              next.push({
+                used: used2, depth: st.depth + 1, cnt: cnt2, pl: pl2, area: area2,
+                score: scoreState(used2, area2, pl2.length, pos, cand.cells)
+              });
+            }
+          }
+        }
+        expanded += next.length;
+        if (expanded > budget || !next.length) break;
+        if (next.length > width) {
+          next.sort(function (x, y) { return (y.score - x.score) || (y.area - x.area) || (x.pl.length - y.pl.length); });
+          next = next.slice(0, width);
+        }
+        beam = next;
+      }
+      return best;
+    }
+
+    /** 启发式打分：面积优先，其次看落点是否贴紧 */
+    function scoreState(used, area, count, pos, cells) {
+      var w = 0, r0 = Math.floor(pos / size), c0 = pos % size;
+      for (var i2 = 0; i2 < cells.length; i2++) {
+        var r = r0 + cells[i2][0], c = c0 + cells[i2][1];
+        if (r + 1 < size) w += adj(used, (r + 1) * size + c);
+        if (r - 1 >= 0) w += adj(used, (r - 1) * size + c);
+        if (c + 1 < size) w += adj(used, r * size + c + 1);
+        if (c - 1 >= 0) w += adj(used, r * size + c - 1);
+      }
+      return area * 10000 + count * 100 + w;
+    }
+    function adj(used, p) {
+      if (!((available >> BigInt(p)) & 1n)) return 0;
+      return ((used >> BigInt(p)) & 1n) ? 0 : 1;
+    }
+
+    /* =================== 结果组装 =================== */
+    function buildResult(types2, availCells, total, unlockedCount, sol) {
+      var placedByType = types2.map(function () { return 0; });
+      var outPl = [];
+      for (var i2 = 0; i2 < sol.placements.length; i2++) {
+        var p = sol.placements[i2];
+        placedByType[p.t]++;
+        outPl.push({
+          typeIndex: p.t,
+          id: types2[p.t].id,
+          name: types2[p.t].name,
+          area: types2[p.t].area,
+          cells: p.cells
+        });
+      }
+      var leftover = [];
+      for (i2 = 0; i2 < types2.length; i2++) {
+        var left = types2[i2].count - placedByType[i2];
+        if (left > 0) leftover.push({
+          typeIndex: i2, id: types2[i2].id, name: types2[i2].name,
+          area: types2[i2].area, count: left
+        });
+      }
+      var placedArea = 0;
+      for (i2 = 0; i2 < outPl.length; i2++) placedArea += outPl[i2].area;
+      return {
+        ok: true,
+        optimal: !!sol.optimal,
+        optimalProven: !!sol.proven,
+        method: sol.method,
+        timedOut: !!sol.timedOut,
+        size: size,
+        placedArea: placedArea,
+        placedCount: outPl.length,
+        availableCells: availCells,
+        lockedCells: total - unlockedCount,
+        leftover: leftover,
+        leftoverArea: Math.max(0, availCells - placedArea),
+        utilization: availCells > 0 ? placedArea / availCells : 0,
+        boardFill: total > 0 ? placedArea / total : 0,
+        placements: outPl,
+        types: types2.map(function (t2) {
+          return { id: t2.id, name: t2.name, area: t2.area, count: t2.count, cells: t2.cells };
+        }),
+        stats: { nodes: sol.nodes, ms: Math.round(sol.ms) }
+      };
+    }
+  }
+
+  return { solve: solve, popcount: popcount, longestRun: longestRun };
+});
+
+</script>
+<script>
+/*!
+ * selftest.js —— 界面自检脚本
+ * 在浏览器里由 index.html#selftest 触发，也可被 Node 测试脚本直接调用。
+ * 返回一段纯文本报告（首行为 SELFTEST-OK / SELFTEST-FAILED）。
+ */
+(function () {
+  'use strict';
+
+  function run() {
+    var log = [], ok = true;
+    function expect(name, cond, extra) {
+      if (!cond) ok = false;
+      log.push((cond ? 'PASS ' : 'FAIL ') + name + (extra ? ' :: ' + extra : ''));
+    }
+    var $ = function (id) { return document.getElementById(id); };
+
+    try {
+      var App = window.GridApp, SolverApi = window.Solver;
+      if (!App) throw new Error('window.GridApp 不存在（app.js 没加载成功？）');
+
+      /* ---- 默认状态 ---- */
+      var initialTypes = App.state.types.length;
+      expect('默认棋盘 6×6', App.state.size === 6, 'size=' + App.state.size);
+      expect('默认只解锁中心 16 格', App.unlockedList().length === 16, 'unlocked=' + App.unlockedList().length);
+      expect('棋盘渲染 36 格', $('board').children.length === 36, 'cells=' + $('board').children.length);
+      expect('默认有物品', initialTypes >= 1, 'types=' + initialTypes);
+      expect('形状库（含 L 形）不少于 12 个', $('palette').children.length >= 12, 'palette=' + $('palette').children.length);
+      expect('画布渲染 36 格', $('drawGrid').children.length === 36, 'draw=' + $('drawGrid').children.length);
+
+      /* ---- 默认配置应当正好铺满初始 4×4 ---- */
+      var def = App.solveSync();
+      expect('默认配置就能铺满 16 格', def.ok && def.placedArea === 16, 'area=' + def.placedArea + ' ok=' + def.ok);
+
+      /* ---- 点格子解锁 ---- */
+      var before = App.unlockedList().length;
+      $('board').children[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect('点击外围格可解锁', App.unlockedList().length === before + 1,
+        before + ' -> ' + App.unlockedList().length);
+      $('board').children[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect('再点一次可重新锁定', App.unlockedList().length === before, 'now=' + App.unlockedList().length);
+
+      /* ---- 全部解锁 / 初始 ---- */
+      $('presetAll').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect('「全部解锁」后 36 格可用', App.unlockedList().length === 36, 'unlocked=' + App.unlockedList().length);
+      $('presetRing').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect('「初始」后回到中心 4×4', App.unlockedList().length === 16, 'unlocked=' + App.unlockedList().length);
+
+      /* ---- 加 L 形 ---- */
+      var n0 = App.state.types.length;
+      $('addL').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect('可以加入 L 形物品', App.state.types.length === n0 + 1, 'types=' + App.state.types.length);
+      var L = App.state.types[App.state.types.length - 1];
+      expect('L 形是 4 格', L.cells.length === 4, 'cells=' + JSON.stringify(L.cells));
+
+      /* ---- 形状库按钮 ---- */
+      $('palette').children[6].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect('形状库按钮可加入物品', App.state.types.length === n0 + 2, 'types=' + App.state.types.length);
+
+      /* ---- 自己画形状 ---- */
+      var dg = $('drawGrid');
+      var savedDraw = App.state.draw.slice();
+      App.state.draw = [];              // 让自检可以重复运行而不受上次残留影响
+      function clickDraw(i) {
+        dg.children[i].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      }
+      clickDraw(0);
+      expect('画布点 1 下', App.state.draw.length === 1, 'draw=' + App.state.draw.length);
+      clickDraw(1);
+      clickDraw(7);
+      expect('画布已选中 3 格', App.state.draw.length === 3, 'draw=' + App.state.draw.length);
+      $('drawAdd').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect('自定义形状已加入清单', App.state.types.length === n0 + 3, 'types=' + App.state.types.length);
+      var custom = App.state.types[App.state.types.length - 1];
+      expect('自定义形状被归一化贴边', custom.cells[0][0] === 0 && custom.cells[0][1] === 0,
+        JSON.stringify(custom.cells));
+
+      /* ---- 数量控件 ---- */
+      var itemCountInput = document.querySelector('#typeList .item input.qty');
+      expect('物品行有数量输入框', !!itemCountInput);
+      if (itemCountInput) {
+        itemCountInput.value = '3';
+        itemCountInput.dispatchEvent(new Event('input', { bubbles: true }));
+        expect('修改数量生效', App.state.types[0].count === 3, 'count=' + App.state.types[0].count);
+      }
+
+      /* ---- 求解（同步） ---- */
+      var res = App.solveSync();
+      expect('求解器返回成功', res.ok === true, res.error || '');
+      expect('有物品被放下', res.placements.length > 0, 'placements=' + res.placements.length);
+      var openSet = {}, s = App.state.size;
+      App.unlockedList().forEach(function (x) { openSet[x] = 1; });
+      var seen = {}, overlap = false, outside = false, overCount = {};
+      res.placements.forEach(function (p) {
+        overCount[p.id] = (overCount[p.id] || 0) + 1;
+        p.cells.forEach(function (rc) {
+          var idx = rc[0] * s + rc[1];
+          if (seen[idx]) overlap = true;
+          seen[idx] = 1;
+          if (!openSet[idx]) outside = true;
+        });
+      });
+      expect('摆放无重叠', !overlap);
+      expect('没有压到未解锁格', !outside);
+      var typesById = {};
+      App.state.types.forEach(function (t) { typesById[t.id] = t; });
+      var over = false;
+      Object.keys(overCount).forEach(function (id) {
+        if (typesById[id] && overCount[id] > typesById[id].count) over = true;
+      });
+      expect('没有超过给定数量', !over);
+
+      /* ---- 渲染结果 / 方案文本 ---- */
+      App.renderResult(res, App.state.types, App.unlockedList(), 1);
+      expect('结果图已渲染', $('resultGrid') !== null);
+      expect('结果图格子数正确', $('resultGrid') && $('resultGrid').children.length === s * s,
+        $('resultGrid') ? $('resultGrid').children.length : 'null');
+      var txt = App.planText(res, App.state.types, App.unlockedList());
+      expect('方案文本以标题开头', txt.indexOf('格子摆放方案') === 0);
+      expect('方案文本含行数', txt.split('\n').length > s, 'lines=' + txt.split('\n').length);
+
+      /* ---- 错误分支：没有物品时给提示 ---- */
+      var saved = App.state.types.slice();
+      App.state.types = [];
+      var err = App.solveSync();
+      expect('没有物品时求解器报错', err.ok === false && !!err.error, err.error || '');
+      App.state.types = saved;
+
+      /* ---- 物品超大时给提示 ---- */
+      var err2 = SolverApi.solve({
+        size: 4, unlocked: [0, 1, 4, 5], mode: 'exact', timeLimit: 500,
+        types: [{ name: '大块', cells: [[0, 0], [0, 1], [0, 2], [0, 3], [0, 4]], count: 1 }]
+      });
+      expect('物品长边超出棋盘时报错', err2.ok === false && /长边/.test(err2.error || ''), err2.error || '');
+    } catch (e) {
+      ok = false;
+      log.push('FAIL 抛出异常 :: ' + (e && e.stack ? e.stack : e));
+    }
+
+    log.unshift(ok ? 'SELFTEST-OK' : 'SELFTEST-FAILED');
+    return log.join('\n');
+  }
+
+  window.__runSelfTest = run;
+})();
+
+</script>
+<script>
+/*!
+ * app.js —— 界面逻辑
+ * 依赖 pieces.js（Pieces）与 solver.js（Solver），均为浏览器全局。
+ */
+(function () {
+  'use strict';
+
+  var P = window.Pieces, SolverApi = window.Solver;
+  var STORE_KEY = 'gridPacker.v1';
+  var PALETTE = ['#4f8cff', '#3ecf8e', '#ffb454', '#ff7a90', '#b48cff', '#4fd8e0',
+                 '#f6d743', '#ff9f6b', '#8ce99a', '#a0aec0'];
+
+  /* ============================ 状态 ============================ */
+  var state = {
+    size: 6,
+    locked: [],                 // 未解锁格索引
+    types: [],                  // {id,name,color,cells:[[r,c]],count,allowMirror}
+    solveMode: 'exact',
+    timeLimit: 4000,
+    allowMirror: true,
+    draw: []                    // 画布选中的格子
+  };
+  var lastResult = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var boardEl = $('board'), typeListEl = $('typeList'), paletteEl = $('palette'), drawGridEl = $('drawGrid');
+
+  /* ============================ 工具 ============================ */
+  function uid() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function nextColor() { return PALETTE[state.types.length % PALETTE.length]; }
+  function normCells(cells) { return P.normalize(cells); }
+  function cellKey(r, c) { return r + ',' + c; }
+
+  /** 默认「初始 4×4」：只解锁中间 (size-2)×(size-2)，外面一圈锁定 */
+  function defaultLocked(size) {
+    var locked = [];
+    for (var r = 0; r < size; r++) {
+      for (var c = 0; c < size; c++) {
+        if (r === 0 || c === 0 || r === size - 1 || c === size - 1) locked.push(r * size + c);
+      }
+    }
+    return locked;
+  }
+  function unlockedList() {
+    var lockedSet = {};
+    for (var i = 0; i < state.locked.length; i++) lockedSet[state.locked[i]] = 1;
+    var out = [];
+    for (var p = 0; p < state.size * state.size; p++) if (!lockedSet[p]) out.push(p);
+    return out;
+  }
+  function ringSize() { return Math.max(1, state.size - 2); }
+
+  /* ============================ 迷你形状预览 ============================ */
+  function miniGrid(cells, cls) {
+    var b = P.bounds(cells);
+    var on = {};
+    for (var i = 0; i < cells.length; i++) on[cells[i][0] + ',' + cells[i][1]] = 1;
+    var el = document.createElement('div');
+    el.className = 'mini-grid' + (cls ? ' ' + cls : '');
+    el.style.gridTemplateColumns = 'repeat(' + b.w + ', auto)';
+    for (var r = 0; r < b.h; r++) {
+      for (var c = 0; c < b.w; c++) {
+        var i2 = document.createElement('i');
+        if (on[r + ',' + c]) i2.className = 'on';
+        el.appendChild(i2);
+      }
+    }
+    return el;
+  }
+
+  /* ============================ 棋盘渲染 ============================ */
+  function renderBoard() {
+    var size = state.size;
+    var lockedSet = {};
+    for (var i = 0; i < state.locked.length; i++) lockedSet[state.locked[i]] = 1;
+    boardEl.style.gridTemplateColumns = 'repeat(' + size + ', auto)';
+    boardEl.innerHTML = '';
+    for (var p = 0; p < size * size; p++) {
+      var cell = document.createElement('div');
+      cell.className = 'cell' + (lockedSet[p] ? ' locked' : '');
+      cell.dataset.index = p;
+      cell.title = '第 ' + (Math.floor(p / size) + 1) + ' 行 第 ' + (p % size + 1) + ' 列（点击切换解锁）';
+      cell.addEventListener('click', onCellClick);
+      boardEl.appendChild(cell);
+    }
+    $('statUnlocked').textContent = size * size - state.locked.length;
+    $('statLocked').textContent = state.locked.length;
+    $('ringLabel').textContent = ringSize() + '×' + ringSize();
+  }
+  function onCellClick(e) {
+    var p = parseInt(e.currentTarget.dataset.index, 10);
+    var at = state.locked.indexOf(p);
+    if (at >= 0) state.locked.splice(at, 1);
+    else state.locked.push(p);
+    renderBoard();
+    save(); refreshStats();
+  }
+
+  /* ============================ 形状调色板 ============================ */
+  function renderPalette() {
+    paletteEl.innerHTML = '';
+    var presets = P.presets();
+    presets.forEach(function (ps) {
+      var b = document.createElement('button');
+      b.className = 'pal-btn';
+      b.appendChild(miniGrid(ps.cells));
+      var span = document.createElement('span');
+      span.textContent = ps.name;
+      b.appendChild(span);
+      b.title = '加入「' + ps.name + '」';
+      b.addEventListener('click', function () {
+        addType(ps.cells, ps.name);
+      });
+      paletteEl.appendChild(b);
+    });
+  }
+
+  /* ============================ 自己画形状 ============================ */
+  function renderDrawGrid() {
+    var N = 6;
+    var on = {};
+    for (var i = 0; i < state.draw.length; i++) on[cellKey(state.draw[i][0], state.draw[i][1])] = 1;
+    drawGridEl.innerHTML = '';
+    for (var r = 0; r < N; r++) {
+      for (var c = 0; c < N; c++) {
+        var d = document.createElement('div');
+        d.className = 'dc' + (on[cellKey(r, c)] ? ' on' : '');
+        (function (rr, cc) {
+          d.addEventListener('click', function () {
+            var idx = -1;
+            for (var k = 0; k < state.draw.length; k++) {
+              if (state.draw[k][0] === rr && state.draw[k][1] === cc) { idx = k; break; }
+            }
+            if (idx >= 0) state.draw.splice(idx, 1);
+            else state.draw.push([rr, cc]);
+            renderDrawGrid();
+          });
+        })(r, c);
+        drawGridEl.appendChild(d);
+      }
+    }
+    var info = $('drawInfo');
+    if (state.draw.length === 0) info.textContent = '点击格子拼出形状';
+    else {
+      var b = P.bounds(state.draw);
+      info.textContent = state.draw.length + ' 格 · 外框 ' + b.w + '×' + b.h;
+    }
+  }
+  $('drawClear').addEventListener('click', function () { state.draw = []; renderDrawGrid(); });
+  $('drawTrim').addEventListener('click', function () {
+    state.draw = normCells(state.draw);
+    renderDrawGrid();
+  });
+  $('drawAdd').addEventListener('click', function () {
+    if (!state.draw.length) { flashStatus('先在左边格子里画出形状'); return; }
+    var name = $('drawName').value.trim();
+    addType(normCells(state.draw.slice()), name || (state.draw.length + ' 格自定义'));
+    $('drawName').value = '';
+  });
+
+  /* ============================ 物品清单 ============================ */
+  function addType(cells, name) {
+    if (!cells || !cells.length) return;
+    var n = normCells(cells);
+    state.types.push({
+      id: uid(),
+      name: name || (n.length + ' 格'),
+      color: nextColor(),
+      cells: n,
+      count: 1,
+      allowMirror: true
+    });
+    renderTypes(); save(); refreshStats();
+  }
+
+  function renderTypes() {
+    typeListEl.innerHTML = '';
+    $('typeCount').textContent = state.types.length + ' 种';
+    if (!state.types.length) {
+      var tip = document.createElement('div');
+      tip.className = 'empty-tip';
+      tip.textContent = '还没有物品：点上面形状库里任意形状，或用「自己画一个形状」';
+      typeListEl.appendChild(tip);
+      return;
+    }
+    state.types.forEach(function (t, i) {
+      var row = document.createElement('div');
+      row.className = 'item';
+
+      var top = document.createElement('div');
+      top.className = 'top';
+      var prev = miniGrid(t.cells, 'lg');
+      prev.style.color = t.color;
+      top.appendChild(prev);
+
+      var name = document.createElement('input');
+      name.type = 'text';
+      name.value = t.name;
+      name.maxLength = 12;
+      name.addEventListener('input', function () { t.name = name.value; save(); });
+      top.appendChild(name);
+
+      var cnt = document.createElement('input');
+      cnt.type = 'number';
+      cnt.className = 'qty';
+      cnt.min = '0';
+      cnt.max = String(state.size * state.size);
+      cnt.value = String(t.count);
+      cnt.title = '数量';
+      cnt.addEventListener('input', function () {
+        var v = parseInt(cnt.value, 10);
+        t.count = isNaN(v) ? 0 : Math.max(0, Math.min(999, v));
+        save(); refreshStats();
+      });
+      top.appendChild(cnt);
+
+      var color = document.createElement('input');
+      color.type = 'color';
+      color.value = t.color;
+      color.title = '颜色';
+      color.addEventListener('input', function () { t.color = color.value; prev.style.color = color.value; save(); });
+      top.appendChild(color);
+
+      var del = document.createElement('button');
+      del.className = 'mini ghost';
+      del.textContent = '✕';
+      del.title = '删除该物品';
+      del.addEventListener('click', function () {
+        state.types.splice(i, 1);
+        renderTypes(); save(); refreshStats();
+      });
+      top.appendChild(del);
+      row.appendChild(top);
+
+      var desc = document.createElement('div');
+      desc.className = 'desc';
+      var txt = document.createElement('span');
+      txt.textContent = P.describe(t.cells);
+      desc.appendChild(txt);
+
+      var mir = document.createElement('label');
+      mir.className = 'f';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = t.allowMirror !== false;
+      cb.addEventListener('change', function () { t.allowMirror = cb.checked; save(); refreshStats(); });
+      mir.appendChild(cb);
+      mir.appendChild(document.createTextNode('可镜像'));
+      desc.appendChild(mir);
+      row.appendChild(desc);
+
+      typeListEl.appendChild(row);
+    });
+  }
+
+  $('addRect').addEventListener('click', function () {
+    var w = parseInt(prompt('矩形宽度（格）', '2'), 10);
+    if (!w) return;
+    var h = parseInt(prompt('矩形高度（格）', '2'), 10);
+    if (!h) return;
+    addType(P.rect(Math.max(1, Math.min(8, w)), Math.max(1, Math.min(8, h))), w + '×' + h);
+  });
+  $('addL').addEventListener('click', function () {
+    var a = parseInt($('lA').value, 10), b = parseInt($('lB').value, 10);
+    addType(P.lShape(a, b), 'L 形 ' + a + '×' + b);
+  });
+  $('clearTypes').addEventListener('click', function () {
+    if (!state.types.length) return;
+    if (!confirm('清空物品清单？')) return;
+    state.types = [];
+    renderTypes(); save(); refreshStats();
+  });
+
+  /* ============================ 统计 ============================ */
+  function refreshStats() {
+    var size = state.size, total = size * size;
+    var unlocked = total - state.locked.length;
+    var pieceArea = 0;
+    for (var i = 0; i < state.types.length; i++) pieceArea += state.types[i].cells.length * state.types[i].count;
+    $('statPieceArea').textContent = pieceArea;
+    var fit = $('statFit');
+    if (!state.types.length) { fit.textContent = '-'; }
+    else if (pieceArea <= unlocked) { fit.textContent = '够放（占 ' + Math.round(pieceArea / unlocked * 100) + '%）'; }
+    else { fit.textContent = '超出 ' + (pieceArea - unlocked) + ' 格'; }
+    var lockedTooBig = state.types.some(function (t) { return P.bounds(t.cells).w > size || P.bounds(t.cells).h > size; });
+    if (lockedTooBig) fit.textContent = '有物品放不进棋盘';
+  }
+
+  /* ============================ 存档 ============================ */
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(serialize())); } catch (e) { /* 忽略 */ }
+  }
+  function serialize() {
+    return {
+      v: 1, size: state.size, locked: state.locked, types: state.types,
+      solveMode: state.solveMode, timeLimit: state.timeLimit, allowMirror: state.allowMirror
+    };
+  }
+  function applyData(data, keepDraw) {
+    if (!data || typeof data !== 'object') return false;
+    if (data.size >= 4 && data.size <= 9) state.size = data.size;
+    state.locked = Array.isArray(data.locked) ? data.locked.filter(function (x) {
+      return typeof x === 'number' && x >= 0 && x < state.size * state.size;
+    }) : defaultLocked(state.size);
+    state.types = Array.isArray(data.types) ? data.types.map(function (t) {
+      return {
+        id: t.id || uid(),
+        name: String(t.name || '物品').slice(0, 12),
+        color: /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : nextColor(),
+        cells: normCells(t.cells || []),
+        count: Math.max(0, Math.min(999, parseInt(t.count, 10) || 0)),
+        allowMirror: t.allowMirror !== false
+      };
+    }).filter(function (t) { return t.cells.length; }) : [];
+    if (data.solveMode === 'beam' || data.solveMode === 'exact') state.solveMode = data.solveMode;
+    if (data.timeLimit) state.timeLimit = data.timeLimit;
+    if (typeof data.allowMirror === 'boolean') state.allowMirror = data.allowMirror;
+    if (!keepDraw) state.draw = [];
+    return true;
+  }
+  function load() {
+    var raw = null;
+    try { raw = localStorage.getItem(STORE_KEY); } catch (e) { /* 忽略 */ }
+    if (raw) { try { if (applyData(JSON.parse(raw))) return; } catch (e) { /* 继续用默认 */ } }
+    applyDefault();
+  }
+  function applyDefault() {
+    state.size = 6;
+    state.locked = defaultLocked(6);
+    // 默认配置正好能铺满初始解锁的中心 4×4（16 格）
+    state.types = [
+      { id: uid(), name: '2×2', color: PALETTE[0], cells: P.rect(2, 2), count: 6, allowMirror: true },
+      { id: uid(), name: '1×2', color: PALETTE[1], cells: P.rect(2, 1), count: 2, allowMirror: true }
+    ];
+    state.solveMode = 'exact';
+    state.timeLimit = 4000;
+    state.allowMirror = true;
+    state.draw = [];
+  }
+  $('resetBtn').addEventListener('click', function () {
+    if (!confirm('恢复到默认配置？当前配置会被覆盖。')) return;
+    applyDefault(); syncControls(); renderAll(); save();
+  });
+  $('exportBtn').addEventListener('click', function () {
+    var text = JSON.stringify(serialize(), null, 2);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        flashStatus('配置已复制到剪贴板');
+      }, function () { window.prompt('复制下面的配置：', text); });
+    } else { window.prompt('复制下面的配置：', text); }
+  });
+  $('importBtn').addEventListener('click', function () {
+    var text = window.prompt('粘贴之前导出的配置 JSON：');
+    if (!text) return;
+    try {
+      applyData(JSON.parse(text));
+      syncControls(); renderAll(); save();
+      flashStatus('配置已导入');
+    } catch (e) { flashStatus('导入失败：不是合法的 JSON'); }
+  });
+
+  /* ============================ 控件同步 ============================ */
+  function syncControls() {
+    $('boardSize').value = String(state.size);
+    $('solveMode').value = state.solveMode;
+    $('timeLimit').value = String(state.timeLimit);
+    $('allowMirror').checked = !!state.allowMirror;
+  }
+  $('boardSize').addEventListener('change', function () {
+    var size = parseInt(this.value, 10);
+    state.size = size;
+    state.locked = defaultLocked(size);
+    // 超出棋盘范围的物品直接去掉
+    state.types = state.types.filter(function (t) {
+      var b = P.bounds(t.cells);
+      return b.w <= size && b.h <= size;
+    });
+    renderAll(); save();
+  });
+  $('presetRing').addEventListener('click', function () {
+    state.locked = defaultLocked(state.size);
+    renderBoard(); save(); refreshStats();
+  });
+  $('presetAll').addEventListener('click', function () {
+    state.locked = []; renderBoard(); save(); refreshStats();
+  });
+  $('presetNone').addEventListener('click', function () {
+    var all = [];
+    for (var p = 0; p < state.size * state.size; p++) all.push(p);
+    state.locked = all; renderBoard(); save(); refreshStats();
+  });
+  $('solveMode').addEventListener('change', function () { state.solveMode = this.value; save(); });
+  $('timeLimit').addEventListener('change', function () { state.timeLimit = parseInt(this.value, 10); save(); });
+  $('allowMirror').addEventListener('change', function () {
+    state.allowMirror = this.checked;
+    state.types.forEach(function (t) { t.allowMirror = state.allowMirror; });
+    renderTypes(); save();
+  });
+
+  /* ============================ 标签页 ============================ */
+  var tabs = document.querySelectorAll('#tabs button[data-view]');
+  Array.prototype.forEach.call(tabs, function (b) {
+    b.addEventListener('click', function () { setView(b.dataset.view); });
+  });
+  function setView(v) {
+    Array.prototype.forEach.call(tabs, function (b) { b.classList.toggle('on', b.dataset.view === v); });
+    $('viewBoard').classList.toggle('hidden', v !== 'board');
+    $('viewResult').classList.toggle('hidden', v !== 'result');
+  }
+
+  /* ============================ 求解 ============================ */
+  function flashStatus(msg, isErr) {
+    var el = $('solveStatus');
+    el.className = 'hint';
+    el.innerHTML = '';
+    if (isErr) {
+      var d = document.createElement('div');
+      d.className = 'err';
+      d.textContent = msg;
+      el.appendChild(d);
+    } else {
+      el.textContent = msg;
+    }
+  }
+
+  function solveNow() {
+    var types = state.types.filter(function (t) { return t.count > 0 && t.cells.length; });
+    if (!types.length) { flashStatus('请先添加至少一种物品（数量要大于 0）', true); return; }
+    var unlocked = unlockedList();
+    if (!unlocked.length) { flashStatus('请先解锁至少一个格子', true); return; }
+
+    $('solveBtn').disabled = true;
+    flashStatus('正在求解…');
+    var el = $('solveStatus');
+    el.innerHTML = '';
+    var busy = document.createElement('div');
+    busy.className = 'busy';
+    var sp = document.createElement('span'); sp.className = 'spinner';
+    busy.appendChild(sp);
+    busy.appendChild(document.createTextNode(' 正在计算最优摆放（预算 ' + (state.timeLimit / 1000) + ' 秒）…'));
+    el.appendChild(busy);
+
+    // 让界面先画出“忙碌”状态，再开始计算
+    setTimeout(function () {
+      var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+      var res;
+      try {
+        res = SolverApi.solve({
+          size: state.size,
+          unlocked: unlocked,
+          mode: state.solveMode,
+          timeLimit: state.timeLimit,
+          types: types.map(function (t) {
+            return { id: t.id, name: t.name, cells: t.cells, count: t.count, allowMirror: t.allowMirror !== false };
+          })
+        });
+      } catch (e) {
+        res = { ok: false, error: '求解出错：' + (e && e.message ? e.message : e) };
+      }
+      var ms = Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0);
+      $('solveBtn').disabled = false;
+      if (!res.ok) { flashStatus(res.error || '求解失败', true); return; }
+      lastResult = res;
+      renderResult(res, types, unlocked, ms);
+      setView('result');
+      $('solveStatus').textContent = '完成 · 用时 ' + ms + 'ms';
+    }, 30);
+  }
+  $('solveBtn').addEventListener('click', solveNow);
+
+  function typeColorMap(types) {
+    var map = {};
+    for (var i = 0; i < types.length; i++) map[types[i].id] = types[i].color;
+    return map;
+  }
+
+  function renderResult(res, types, unlocked, ms) {
+    var area = $('resultArea');
+    area.innerHTML = '';
+    var size = res.size;
+    var colors = typeColorMap(types);
+
+    /* --- 概览徽章 --- */
+    var head = document.createElement('div');
+    head.className = 'res-head';
+    var pct = Math.round(res.utilization * 100);
+    function badge(text, cls) {
+      var b = document.createElement('span');
+      b.className = 'badge' + (cls ? ' ' + cls : '');
+      b.textContent = text;
+      head.appendChild(b);
+    }
+    badge('填入 ' + res.placedArea + ' / ' + res.availableCells + ' 格（' + pct + '%）',
+      res.placedArea === res.availableCells ? 'ok' : 'warn');
+    badge('放置 ' + res.placedCount + ' 件', 'info');
+    if (res.optimalProven) badge('已证明最优', 'ok');
+    else if (res.optimal) badge('最优（全填满）', 'ok');
+    else badge('当前找到的最好方案', 'warn');
+    badge(res.method === 'exact' ? '精确搜索' : (res.method === 'beam' ? '快速启发式' : '精确搜索超时→启发式'));
+    badge('搜索节点 ' + res.stats.nodes + ' · ' + ms + 'ms');
+    area.appendChild(head);
+
+    /* --- 摆放图 --- */
+    var grid = document.createElement('div');
+    grid.id = 'resultGrid';
+    grid.style.gridTemplateColumns = 'repeat(' + size + ', auto)';
+    var cellColor = {}, cellLabel = {}, number = {};
+    var lockedSet = {};
+    for (var k = 0; k < size * size; k++) lockedSet[k] = true;
+    for (k = 0; k < unlocked.length; k++) lockedSet[unlocked[k]] = false;
+    res.placements.forEach(function (p, pi) {
+      var ch = String(pi + 1);
+      for (var i = 0; i < p.cells.length; i++) {
+        var idx = p.cells[i][0] * size + p.cells[i][1];
+        cellColor[idx] = colors[p.id] || '#4f8cff';
+        // 只在「该物品的最小格」写编号，画面更干净
+        if (!(idx in cellLabel)) cellLabel[idx] = ch;
+      }
+      number[p.id] = (number[p.id] || 0) + 1;
+    });
+    for (var p2 = 0; p2 < size * size; p2++) {
+      var cell = document.createElement('div');
+      cell.className = 'cell';
+      if (lockedSet[p2]) cell.classList.add('locked');
+      else if (cellColor[p2]) {
+        cell.classList.add('filled');
+        cell.style.background = cellColor[p2];
+      } else cell.classList.add('empty-open');
+      if (cellColor[p2] && cellLabel[p2]) {
+        var lb = document.createElement('span');
+        lb.className = 'lbl';
+        lb.textContent = cellLabel[p2];
+        cell.appendChild(lb);
+      }
+      grid.appendChild(cell);
+    }
+    area.appendChild(grid);
+
+    /* --- 物品明细 --- */
+    var list = document.createElement('div');
+    list.className = 'res-pieces';
+    var placedCount = {};
+    res.placements.forEach(function (p) { placedCount[p.id] = (placedCount[p.id] || 0) + 1; });
+    types.forEach(function (t, i) {
+      var put = placedCount[t.id] || 0;
+      if (!put) return;
+      var d = document.createElement('div');
+      d.className = 'res-piece';
+      var dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = t.color;
+      d.appendChild(dot);
+      var name = document.createElement('span');
+      name.textContent = t.name;
+      d.appendChild(name);
+      var n = document.createElement('span');
+      n.className = 'n';
+      n.textContent = '× ' + put + (put < t.count ? '（' + t.count + ' 中放不下 ' + (t.count - put) + '）' : '');
+      d.appendChild(n);
+      list.appendChild(d);
+    });
+    area.appendChild(list);
+
+    /* --- 剩余 / 空洞说明 --- */
+    var left = document.createElement('div');
+    left.className = 'leftover';
+    var parts = [];
+    if (res.leftover.length) {
+      parts.push('放不下：' + res.leftover.map(function (l) { return l.name + ' ×' + l.count; }).join('、'));
+    }
+    if (res.leftoverArea > 0) parts.push('空着 ' + res.leftoverArea + ' 格');
+    left.textContent = parts.length ? parts.join(' · ') : '全部物品都放下了，且没有空格';
+    area.appendChild(left);
+
+    /* --- 纯文本方案（复制用） --- */
+    var pre = document.createElement('pre');
+    pre.className = 'plan';
+    pre.textContent = planText(res, types, unlocked);
+    area.appendChild(pre);
+  }
+
+  function planText(res, types, unlocked) {
+    var size = res.size;
+    var grid = [];
+    for (var r = 0; r < size; r++) {
+      var row = [];
+      for (var c = 0; c < size; c++) row.push(null);
+      grid.push(row);
+    }
+    // 未解锁格标 X
+    var open = {};
+    for (var i = 0; i < unlocked.length; i++) open[unlocked[i]] = 1;
+    for (var p = 0; p < size * size; p++) {
+      if (!open[p]) grid[Math.floor(p / size)][p % size] = 'X';
+    }
+    var chars = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    res.placements.forEach(function (pl, idx) {
+      var ch = idx < chars.length ? chars[idx] : '?';
+      pl.cells.forEach(function (rc) { grid[rc[0]][rc[1]] = ch; });
+    });
+    var lines = [];
+    lines.push('格子摆放方案（' + size + '×' + size + '，X = 未解锁格，· = 空着）');
+    lines.push('填入 ' + res.placedArea + '/' + res.availableCells + ' 格（' +
+      Math.round(res.utilization * 100) + '%），' +
+      (res.optimalProven ? '已证明最优' : (res.optimal ? '最优（全填满）' : '当前找到的最好方案')));
+    lines.push('');
+    for (var r2 = 0; r2 < size; r2++) {
+      var s = [];
+      for (var c2 = 0; c2 < size; c2++) s.push(grid[r2][c2] === null ? '·' : String(grid[r2][c2]));
+      lines.push(s.join(' '));
+    }
+    lines.push('');
+    res.placements.forEach(function (pl, idx) {
+      var ch = idx < chars.length ? chars[idx] : '?';
+      lines.push(ch + '  ' + pl.name + '  左上角 (' + (pl.cells[0][0] + 1) + ',' + (pl.cells[0][1] + 1) + ')');
+    });
+    if (res.leftover.length) {
+      lines.push('');
+      lines.push('放不下：' + res.leftover.map(function (l) { return l.name + ' ×' + l.count; }).join('、'));
+    }
+    void types;
+    return lines.join('\n');
+  }
+
+  $('copyBtn').addEventListener('click', function () {
+    if (!lastResult) { flashStatus('先点「开始求解」'); return; }
+    var text = planText(lastResult, state.types, unlockedList());
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { flashStatus('方案已复制到剪贴板'); },
+        function () { window.prompt('复制下面的方案：', text); });
+    } else { window.prompt('复制下面的方案：', text); }
+  });
+
+  /* ============================ 启动 ============================ */
+  function renderAll() {
+    renderBoard(); renderPalette(); renderDrawGrid(); renderTypes(); refreshStats();
+  }
+  load();
+  syncControls();
+  renderAll();
+  setView('board');
+
+  // 键盘快捷键：Ctrl/Cmd + Enter 求解
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); solveNow(); }
+  });
+
+  // 暴露给自检脚本 / 控制台调试用（不影响正常使用）
+  window.GridApp = {
+    state: state,
+    unlockedList: unlockedList,
+    renderResult: renderResult,
+    planText: planText,
+    solveNow: solveNow,
+    setView: setView,
+    solveSync: function () {
+      return SolverApi.solve({
+        size: state.size,
+        unlocked: unlockedList(),
+        mode: state.solveMode,
+        timeLimit: state.timeLimit,
+        types: state.types.filter(function (t) { return t.count > 0; })
+      });
+    }
+  };
+
+  // 自检模式：地址栏加 #selftest 时运行（selftest.js）
+  if (location.hash === '#selftest' && typeof window.__runSelfTest === 'function') {
+    var box = document.createElement('pre');
+    box.id = 'selftest';
+    try {
+      box.textContent = window.__runSelfTest();
+    } catch (e) {
+      box.textContent = 'SELFTEST-FAILED\nFAIL 自检脚本异常 :: ' + (e && e.stack ? e.stack : e);
+    }
+    document.body.appendChild(box);
+  }
+})();
+
+</script>
+</body>
+</html>
