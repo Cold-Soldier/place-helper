@@ -1,0 +1,18 @@
+{
+  "name": "grid-packing-helper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "格子摆放辅助器：解锁格子 + 自定义形状（含 L 形）物品 + 最优摆放求解（纯前端，双击 index.html 即可用）",
+  "scripts": {
+    "test": "node test/static.test.mjs && node test/solver.test.mjs && node test/ui.test.mjs && node test/single.test.mjs",
+    "test:static": "node test/static.test.mjs",
+    "test:solver": "node test/solver.test.mjs",
+    "test:ui": "node test/ui.test.mjs",
+    "test:single": "node test/single.test.mjs",
+    "build": "node build-single.mjs",
+    "serve": "node serve.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

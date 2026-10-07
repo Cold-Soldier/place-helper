@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>格子摆放辅助器</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ======================= 左侧控制台 ======================= -->
+  <aside id="panel">
+    <header id="panelHead">
+      <h1>格子摆放辅助器</h1>
+      <p>解锁格子 · 添加物品 · 求解最优摆放</p>
+    </header>
+
+    <div id="panelBody">
+
+      <!-- 1. 棋盘 -->
+      <section class="sec">
+        <h2>1 · 棋盘与解锁</h2>
+        <div class="row">
+          <label class="f">棋盘边长
+            <select id="boardSize">
+              <option value="5">5 × 5</option>
+              <option value="6" selected>6 × 6</option>
+              <option value="7">7 × 7</option>
+              <option value="8">8 × 8</option>
+              <option value="9">9 × 9</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <button id="presetRing" title="只解锁中间 (边长-2) 的区域，外围一圈锁定">初始：仅中心 <span id="ringLabel">4×4</span></button>
+          <button id="presetAll">全部解锁</button>
+          <button id="presetNone">全部锁定</button>
+        </div>
+        <div class="hint">直接点棋盘上的格子即可切换「已解锁 / 未解锁」。灰色斜纹 = 未解锁，物品不会摆在那里。</div>
+        <div class="row tagline">
+          <span class="tag">已解锁 <b id="statUnlocked">0</b> 格</span>
+          <span class="tag">未解锁 <b id="statLocked">0</b> 格</span>
+        </div>
+      </section>
+
+      <!-- 2. 形状库 -->
+      <section class="sec">
+        <h2>2 · 形状库（含 L 形）</h2>
+        <div class="row" id="palette"></div>
+
+        <details id="drawBox">
+          <summary>自己画一个形状（最多 6×6）</summary>
+          <div class="row">
+            <div id="drawGrid" class="draw-grid"></div>
+            <div class="draw-side">
+              <div class="hint" id="drawInfo">点击格子拼出形状</div>
+              <input type="text" id="drawName" placeholder="物品名称（可留空）" maxlength="12">
+              <div class="row">
+                <button id="drawClear" class="mini ghost">清空</button>
+                <button id="drawTrim" class="mini ghost" title="把形状平移到左上角贴边">贴边</button>
+              </div>
+              <button id="drawAdd" class="primary">加入物品清单</button>
+            </div>
+          </div>
+        </details>
+
+        <div class="row">
+          <label class="f">L 形尺寸
+            <select id="lA">
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+            ×
+            <select id="lB">
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+          <button id="addL" class="mini">加入 L 形</button>
+        </div>
+      </section>
+
+      <!-- 3. 物品清单 -->
+      <section class="sec">
+        <h2>3 · 物品清单 <span class="count-badge" id="typeCount">0 种</span></h2>
+        <div id="typeList"></div>
+        <div class="row">
+          <button id="addRect" class="mini">+ 矩形…</button>
+          <button id="clearTypes" class="mini ghost">清空清单</button>
+        </div>
+        <div class="row tagline">
+          <span class="tag">物品总格数 <b id="statPieceArea">0</b></span>
+          <span class="tag">可摆面积 <b id="statFit">-</b></span>
+        </div>
+      </section>
+
+      <!-- 4. 求解 -->
+      <section class="sec">
+        <h2>4 · 求解</h2>
+        <div class="row">
+          <label class="f">方式
+            <select id="solveMode">
+              <option value="exact" selected>精确（能证明最优，稍慢）</option>
+              <option value="beam">快速（启发式，几乎秒出）</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="f">时间预算
+            <select id="timeLimit">
+              <option value="800">0.8 秒</option>
+              <option value="2000">2 秒</option>
+              <option value="4000" selected>4 秒</option>
+              <option value="8000">8 秒</option>
+              <option value="15000">15 秒</option>
+            </select>
+          </label>
+          <label class="f"><input type="checkbox" id="allowMirror" checked> 允许镜像翻转</label>
+        </div>
+        <div class="row">
+          <button id="solveBtn" class="primary big">开始求解</button>
+          <button id="copyBtn" class="ghost">复制方案</button>
+        </div>
+        <div id="solveStatus" class="hint"></div>
+      </section>
+
+      <!-- 5. 存档 -->
+      <section class="sec">
+        <h2>5 · 存档</h2>
+        <div class="row">
+          <button id="exportBtn" class="mini">导出配置</button>
+          <button id="importBtn" class="mini">导入配置</button>
+          <button id="resetBtn" class="mini ghost">恢复默认</button>
+        </div>
+        <div class="hint">配置会自动保存在浏览器本地，下次打开还在。</div>
+      </section>
+
+    </div>
+  </aside>
+
+  <!-- ======================= 右侧舞台 ======================= -->
+  <main id="stage">
+    <div id="tabs">
+      <button data-view="board" class="on">① 棋盘 / 解锁</button>
+      <button data-view="result">② 摆放结果</button>
+      <span class="sp"></span>
+      <span class="tag" id="hintTag">点格子解锁，右侧看方案</span>
+    </div>
+    <div id="stageMain">
+      <div id="viewBoard" class="view">
+        <div id="board"></div>
+        <div class="legend">
+          <span><i class="sw locked"></i>未解锁</span>
+          <span><i class="sw open"></i>已解锁</span>
+          <span><i class="sw piece"></i>已摆放物品</span>
+        </div>
+      </div>
+      <div id="viewResult" class="view hidden">
+        <div id="resultArea"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/pieces.js"></script>
+<script src="js/solver.js"></script>
+<script src="js/selftest.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
