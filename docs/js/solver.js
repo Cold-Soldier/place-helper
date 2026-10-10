@@ -99,7 +99,11 @@
       var count = Math.max(0, t.count | 0);
       if (count === 0 || !t.cells || !t.cells.length) continue;
       var base = P.normalize(t.cells);
-      var trs = P.transforms(base, t.allowMirror !== false);
+      // allowRotate / allowMirror 可分别控制；只传 allowMirror 时行为与旧版一致
+      var trs = P.transforms(base, {
+        rotate: t.allowRotate !== false,
+        mirror: t.allowMirror !== false
+      });
       if (!trs.length) continue;
       var maxRun = 0;
       for (var k = 0; k < trs.length; k++) maxRun = Math.max(maxRun, longestRun(trs[k].cells));
@@ -113,7 +117,9 @@
         cells: base,
         trs: trs,
         count: count,
-        maxRun: maxRun
+        maxRun: maxRun,
+        allowRotate: t.allowRotate !== false,
+        allowMirror: t.allowMirror !== false
       });
     }
     if (!types.length) return { ok: false, error: '请先添加至少一种物品' };
@@ -448,15 +454,24 @@
     function buildResult(types2, availCells, total, unlockedCount, sol) {
       var placedByType = types2.map(function () { return 0; });
       var outPl = [];
+      var mirroredUsed = 0, rotatedUsed = 0;
       for (var i2 = 0; i2 < sol.placements.length; i2++) {
         var p = sol.placements[i2];
         placedByType[p.t]++;
+        // 记录这件物品实际用的朝向：是原样、转了多少度、还是必须镜像
+        var ori = P.orientationOf(p.cells, types2[p.t].cells);
+        if (ori) {
+          if (ori.mirrored) mirroredUsed++;
+          else if (ori.rot !== 0) rotatedUsed++;
+        }
         outPl.push({
           typeIndex: p.t,
           id: types2[p.t].id,
           name: types2[p.t].name,
           area: types2[p.t].area,
-          cells: p.cells
+          cells: p.cells,
+          orient: ori,
+          orientText: ori ? P.describeOrientation(ori) : ''
         });
       }
       var leftover = [];
@@ -484,9 +499,14 @@
         leftoverArea: Math.max(0, availCells - placedArea),
         utilization: availCells > 0 ? placedArea / availCells : 0,
         boardFill: total > 0 ? placedArea / total : 0,
+        placedMirrored: mirroredUsed,     // 用了「必须镜像」朝向的件数
+        placedRotated: rotatedUsed,       // 只用旋转就摆下的件数
         placements: outPl,
         types: types2.map(function (t2) {
-          return { id: t2.id, name: t2.name, area: t2.area, count: t2.count, cells: t2.cells };
+          return {
+            id: t2.id, name: t2.name, area: t2.area, count: t2.count, cells: t2.cells,
+            allowRotate: t2.allowRotate !== false, allowMirror: t2.allowMirror !== false
+          };
         }),
         stats: { nodes: sol.nodes, ms: Math.round(sol.ms) }
       };

@@ -89,6 +89,7 @@
       <section class="sec">
         <h2>3 · 物品清单 <span class="count-badge" id="typeCount">0 种</span></h2>
         <div id="typeList"></div>
+        <div class="hint">每行右侧的「可旋转 / 可镜像」可以单独控制这一种物品的摆放自由度。</div>
         <div class="row">
           <button id="addRect" class="mini">+ 矩形…</button>
           <button id="clearTypes" class="mini ghost">清空清单</button>
@@ -120,7 +121,17 @@
               <option value="15000">15 秒</option>
             </select>
           </label>
+          <label class="f"><input type="checkbox" id="allowRotate" checked> 允许旋转</label>
           <label class="f"><input type="checkbox" id="allowMirror" checked> 允许镜像翻转</label>
+        </div>
+        <div class="hint">
+          关掉「允许旋转」= 只能按你画出来的方向摆；关掉「允许镜像翻转」= 只能用旋转能达到的方向。
+        </div>
+        <div class="hint">
+          注意：<b>2×2、1×2、3 格 L</b> 这类形状的镜像本来就等于它的某个旋转，
+          所以对它们关掉镜像看不出区别（本来也不存在“被镜像”这回事）；
+          <b>4 格 L、S/Z 形</b>才是手性的，关掉镜像才真正少一半朝向。
+          结果区会标出每件物品的实际朝向，可以自己核对。
         </div>
         <div class="row">
           <button id="solveBtn" class="primary big">开始求解</button>

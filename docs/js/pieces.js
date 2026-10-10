@@ -61,28 +61,77 @@
   }
 
   /**
-   * 生成一个形状的所有摆放方向。
+   * 生成一个形状的所有可摆放朝向。
    * @param {number[][]} cells 形状格子
-   * @param {boolean} allowMirror 是否允许镜像（L 形默认允许，可严格只用旋转）
-   * @returns {{cells:number[][], key:string, allowMirror:boolean}[]}
+   * @param {boolean|{rotate?:boolean, mirror?:boolean}} opts
+   *        传布尔值时表示“是否允许镜像”（兼容旧写法）；
+   *        传对象时可分别控制 rotate（是否允许旋转，默认 true）与 mirror（是否允许镜像，默认 true）。
+   * @returns {{cells:number[][], key:string, rot:number, mirrored:boolean, allowMirror:boolean}[]}
    */
-  function transforms(cells, allowMirror) {
+  function transforms(cells, opts) {
     var base = normalize(cells);
     if (base.length === 0) return [];
+
+    var allowRotate = true, allowMirror = true;
+    if (typeof opts === 'boolean') allowMirror = opts;
+    else if (opts && typeof opts === 'object') {
+      allowMirror = opts.mirror !== false;
+      allowRotate = opts.rotate !== false;
+    } else if (opts === false) allowMirror = false;
+
     var seen = Object.create(null), out = [];
     var variants = allowMirror ? [base, mirrorH(base)] : [base];
     for (var v = 0; v < variants.length; v++) {
       var cur = variants[v];
-      for (var r = 0; r < 4; r++) {
+      var rounds = allowRotate ? 4 : 1;
+      for (var r = 0; r < rounds; r++) {
         var k = key(cur);
         if (!seen[k]) {
           seen[k] = 1;
-          out.push({ cells: cur, key: k, allowMirror: !!allowMirror });
+          // 标签按「能否只用旋转达到」来判定：非手性形状的镜像会标成旋转（这是准确的）
+          var ori = orientationOf(cur, base) || { rot: r, mirrored: v > 0 };
+          out.push({
+            cells: cur,
+            key: k,
+            rot: ori.rot,
+            mirrored: ori.mirrored,
+            allowMirror: !!allowMirror
+          });
         }
         cur = rotate(cur);
       }
     }
     return out;
+  }
+
+  /**
+   * 判断某个朝向相对原始形状是「转了几度」还是「必须镜像」。
+   * 优先匹配旋转：只有旋转做不到时才算镜像。
+   * @returns {{rot:number, mirrored:boolean}|null} rot = 顺时针 90° 的次数（0~3）
+   */
+  function orientationOf(cells, baseCells) {
+    var target = normalize(cells);
+    var base = normalize(baseCells);
+    if (!target.length || !base.length) return null;
+    var tk = key(target);
+    var cur = base;
+    for (var r = 0; r < 4; r++) {
+      if (key(cur) === tk) return { rot: r, mirrored: false };
+      cur = rotate(cur);
+    }
+    cur = mirrorH(base);
+    for (var r2 = 0; r2 < 4; r2++) {
+      if (key(cur) === tk) return { rot: r2, mirrored: true };
+      cur = rotate(cur);
+    }
+    return null;
+  }
+
+  /** 把朝向变成人能读的文字，例如「原朝向」「顺时针 180°」「镜像」 */
+  function describeOrientation(ori) {
+    if (!ori) return '未知朝向';
+    var turn = ['原朝向', '顺时针 90°', '顺时针 180°', '顺时针 270°'][ori.rot] || ('旋转 ' + ori.rot + '×90°');
+    return ori.mirrored ? (ori.rot === 0 ? '镜像' : '镜像 + ' + turn) : turn;
   }
 
   /** 形状面积（格子数） */
@@ -174,6 +223,8 @@
     rotate: rotate,
     mirrorH: mirrorH,
     transforms: transforms,
+    orientationOf: orientationOf,
+    describeOrientation: describeOrientation,
     bounds: bounds,
     area: area,
     isSquare: isSquare,

@@ -14,9 +14,10 @@
   var state = {
     size: 6,
     locked: [],                 // 未解锁格索引
-    types: [],                  // {id,name,color,cells:[[r,c]],count,allowMirror}
+    types: [],                  // {id,name,color,cells:[[r,c]],count,allowRotate,allowMirror}
     solveMode: 'exact',
     timeLimit: 4000,
+    allowRotate: true,          // 全局：新加入物品与批量设置的默认值
     allowMirror: true,
     draw: []                    // 画布选中的格子
   };
@@ -168,7 +169,9 @@
       color: nextColor(),
       cells: n,
       count: 1,
-      allowMirror: true
+      // 新加入的物品沿用当前的全局开关，避免“关了镜像新形状却还能翻”的困惑
+      allowRotate: state.allowRotate !== false,
+      allowMirror: state.allowMirror !== false
     });
     renderTypes(); save(); refreshStats();
   }
@@ -238,19 +241,34 @@
       txt.textContent = P.describe(t.cells);
       desc.appendChild(txt);
 
-      var mir = document.createElement('label');
-      mir.className = 'f';
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = t.allowMirror !== false;
-      cb.addEventListener('change', function () { t.allowMirror = cb.checked; save(); refreshStats(); });
-      mir.appendChild(cb);
-      mir.appendChild(document.createTextNode('可镜像'));
-      desc.appendChild(mir);
+      // 每件物品可以单独决定：能不能转、能不能镜像
+      desc.appendChild(makeFlag('可旋转', 'rotate', t.allowRotate !== false, function (on) {
+        t.allowRotate = on; save(); refreshStats();
+      }));
+      desc.appendChild(makeFlag('可镜像', 'mirror', t.allowMirror !== false, function (on) {
+        t.allowMirror = on; save(); refreshStats();
+      }));
       row.appendChild(desc);
 
       typeListEl.appendChild(row);
     });
+  }
+
+  /** 生成一个「可旋转 / 可镜像」勾选项 */
+  function makeFlag(labelText, kind, checked, onChange) {
+    var lab = document.createElement('label');
+    lab.className = 'f';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'flag-' + kind;
+    cb.checked = checked;
+    cb.title = kind === 'rotate'
+      ? '允许这件物品旋转摆放；关掉后只能用它原本画出来的方向'
+      : '允许这件物品镜像翻转摆放；关掉后只能用旋转能达到的方向';
+    cb.addEventListener('change', function () { onChange(cb.checked); });
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(labelText));
+    return lab;
   }
 
   $('addRect').addEventListener('click', function () {
@@ -293,7 +311,8 @@
   function serialize() {
     return {
       v: 1, size: state.size, locked: state.locked, types: state.types,
-      solveMode: state.solveMode, timeLimit: state.timeLimit, allowMirror: state.allowMirror
+      solveMode: state.solveMode, timeLimit: state.timeLimit,
+      allowRotate: state.allowRotate, allowMirror: state.allowMirror
     };
   }
   function applyData(data, keepDraw) {
@@ -309,11 +328,13 @@
         color: /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : nextColor(),
         cells: normCells(t.cells || []),
         count: Math.max(0, Math.min(999, parseInt(t.count, 10) || 0)),
+        allowRotate: t.allowRotate !== false,
         allowMirror: t.allowMirror !== false
       };
     }).filter(function (t) { return t.cells.length; }) : [];
     if (data.solveMode === 'beam' || data.solveMode === 'exact') state.solveMode = data.solveMode;
     if (data.timeLimit) state.timeLimit = data.timeLimit;
+    if (typeof data.allowRotate === 'boolean') state.allowRotate = data.allowRotate;
     if (typeof data.allowMirror === 'boolean') state.allowMirror = data.allowMirror;
     if (!keepDraw) state.draw = [];
     return true;
@@ -329,11 +350,12 @@
     state.locked = defaultLocked(6);
     // 默认配置正好能铺满初始解锁的中心 4×4（16 格）
     state.types = [
-      { id: uid(), name: '2×2', color: PALETTE[0], cells: P.rect(2, 2), count: 6, allowMirror: true },
-      { id: uid(), name: '1×2', color: PALETTE[1], cells: P.rect(2, 1), count: 2, allowMirror: true }
+      { id: uid(), name: '2×2', color: PALETTE[0], cells: P.rect(2, 2), count: 6, allowRotate: true, allowMirror: true },
+      { id: uid(), name: '1×2', color: PALETTE[1], cells: P.rect(2, 1), count: 2, allowRotate: true, allowMirror: true }
     ];
     state.solveMode = 'exact';
     state.timeLimit = 4000;
+    state.allowRotate = true;
     state.allowMirror = true;
     state.draw = [];
   }
@@ -364,6 +386,8 @@
     $('boardSize').value = String(state.size);
     $('solveMode').value = state.solveMode;
     $('timeLimit').value = String(state.timeLimit);
+    var ra = $('allowRotate');
+    if (ra) ra.checked = state.allowRotate !== false;
     $('allowMirror').checked = !!state.allowMirror;
   }
   $('boardSize').addEventListener('change', function () {
@@ -391,6 +415,11 @@
   });
   $('solveMode').addEventListener('change', function () { state.solveMode = this.value; save(); });
   $('timeLimit').addEventListener('change', function () { state.timeLimit = parseInt(this.value, 10); save(); });
+  $('allowRotate').addEventListener('change', function () {
+    state.allowRotate = this.checked;
+    state.types.forEach(function (t) { t.allowRotate = state.allowRotate; });
+    renderTypes(); save();
+  });
   $('allowMirror').addEventListener('change', function () {
     state.allowMirror = this.checked;
     state.types.forEach(function (t) { t.allowMirror = state.allowMirror; });
@@ -451,7 +480,11 @@
           mode: state.solveMode,
           timeLimit: state.timeLimit,
           types: types.map(function (t) {
-            return { id: t.id, name: t.name, cells: t.cells, count: t.count, allowMirror: t.allowMirror !== false };
+            return {
+              id: t.id, name: t.name, cells: t.cells, count: t.count,
+              allowRotate: t.allowRotate !== false,
+              allowMirror: t.allowMirror !== false
+            };
           })
         });
       } catch (e) {
@@ -498,6 +531,15 @@
     else badge('当前找到的最好方案', 'warn');
     badge(res.method === 'exact' ? '精确搜索' : (res.method === 'beam' ? '快速启发式' : '精确搜索超时→启发式'));
     badge('搜索节点 ' + res.stats.nodes + ' · ' + ms + 'ms');
+    // 朝向统计：让人一眼看出「有没有用到镜像朝向」
+    var anyMirrorOff = types.some(function (t) { return t.allowMirror === false; });
+    var anyRotateOff = types.some(function (t) { return t.allowRotate === false; });
+    if (res.placedMirrored > 0) {
+      badge('其中 ' + res.placedMirrored + ' 件用了镜像朝向', 'warn');
+    } else if (anyMirrorOff) {
+      badge('全部只用旋转/原朝向（0 件镜像）', 'ok');
+    }
+    if (anyRotateOff) badge('已限制旋转', 'info');
     area.appendChild(head);
 
     /* --- 摆放图 --- */
@@ -536,13 +578,17 @@
     }
     area.appendChild(grid);
 
-    /* --- 物品明细 --- */
+    /* --- 物品明细（含每件物品实际用的朝向） --- */
     var list = document.createElement('div');
     list.className = 'res-pieces';
-    var placedCount = {};
-    res.placements.forEach(function (p) { placedCount[p.id] = (placedCount[p.id] || 0) + 1; });
-    types.forEach(function (t, i) {
-      var put = placedCount[t.id] || 0;
+    var placedByType = {}, orientByType = {};
+    res.placements.forEach(function (p) {
+      placedByType[p.id] = (placedByType[p.id] || 0) + 1;
+      (orientByType[p.id] = orientByType[p.id] || {})[p.orientText || '未知朝向'] =
+        ((orientByType[p.id] || {})[p.orientText || '未知朝向'] || 0) + 1;
+    });
+    types.forEach(function (t) {
+      var put = placedByType[t.id] || 0;
       if (!put) return;
       var d = document.createElement('div');
       d.className = 'res-piece';
@@ -557,6 +603,16 @@
       n.className = 'n';
       n.textContent = '× ' + put + (put < t.count ? '（' + t.count + ' 中放不下 ' + (t.count - put) + '）' : '');
       d.appendChild(n);
+      // 朝向明细：例如「顺时针 180° ×2 · 原朝向 ×1」
+      var ori = orientByType[t.id] || {};
+      var oriTxt = Object.keys(ori).map(function (k) { return k + ' ×' + ori[k]; }).join(' · ');
+      if (oriTxt) {
+        var os = document.createElement('span');
+        os.className = 'n orient';
+        os.textContent = oriTxt;
+        os.title = '这件物品实际摆放时用的朝向';
+        d.appendChild(os);
+      }
       list.appendChild(d);
     });
     area.appendChild(list);
@@ -603,6 +659,9 @@
     lines.push('填入 ' + res.placedArea + '/' + res.availableCells + ' 格（' +
       Math.round(res.utilization * 100) + '%），' +
       (res.optimalProven ? '已证明最优' : (res.optimal ? '最优（全填满）' : '当前找到的最好方案')));
+    lines.push('朝向统计：镜像朝向 ' + (res.placedMirrored || 0) + ' 件，' +
+      '纯旋转 ' + (res.placedRotated || 0) + ' 件，' +
+      '原朝向 ' + Math.max(0, res.placedCount - (res.placedMirrored || 0) - (res.placedRotated || 0)) + ' 件');
     lines.push('');
     for (var r2 = 0; r2 < size; r2++) {
       var s = [];
@@ -612,7 +671,8 @@
     lines.push('');
     res.placements.forEach(function (pl, idx) {
       var ch = idx < chars.length ? chars[idx] : '?';
-      lines.push(ch + '  ' + pl.name + '  左上角 (' + (pl.cells[0][0] + 1) + ',' + (pl.cells[0][1] + 1) + ')');
+      lines.push(ch + '  ' + pl.name + '  左上角 (' + (pl.cells[0][0] + 1) + ',' + (pl.cells[0][1] + 1) + ')' +
+        (pl.orientText ? '  [' + pl.orientText + ']' : ''));
     });
     if (res.leftover.length) {
       lines.push('');
@@ -659,7 +719,13 @@
         unlocked: unlockedList(),
         mode: state.solveMode,
         timeLimit: state.timeLimit,
-        types: state.types.filter(function (t) { return t.count > 0; })
+        types: state.types.filter(function (t) { return t.count > 0; }).map(function (t) {
+          return {
+            id: t.id, name: t.name, cells: t.cells, count: t.count,
+            allowRotate: t.allowRotate !== false,
+            allowMirror: t.allowMirror !== false
+          };
+        })
       });
     }
   };

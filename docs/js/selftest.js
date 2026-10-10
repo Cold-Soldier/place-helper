@@ -15,7 +15,7 @@
     var $ = function (id) { return document.getElementById(id); };
 
     try {
-      var App = window.GridApp, SolverApi = window.Solver;
+      var App = window.GridApp, SolverApi = window.Solver, P0 = window.Pieces;
       if (!App) throw new Error('window.GridApp 不存在（app.js 没加载成功？）');
 
       /* ---- 默认状态 ---- */
@@ -117,6 +117,60 @@
       var txt = App.planText(res, App.state.types, App.unlockedList());
       expect('方案文本以标题开头', txt.indexOf('格子摆放方案') === 0);
       expect('方案文本含行数', txt.split('\n').length > s, 'lines=' + txt.split('\n').length);
+      expect('方案文本含朝向统计', txt.indexOf('朝向统计') > 0);
+      expect('结果里每件物品带朝向标签', res.placements.every(function (p) { return !!p.orientText; }),
+        JSON.stringify(res.placements.map(function (p) { return p.orientText; })));
+
+      /* ---- 朝向开关：关掉镜像后不允许出现「必须镜像」的朝向 ---- */
+      var l4 = P0.lShape(3, 2);                 // 4 格 L 是手性形状，能真正体现镜像开关
+      var mirrorOff = SolverApi.solve({
+        size: 5, unlocked: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
+        mode: 'exact', timeLimit: 3000,
+        types: [{ name: 'L4', cells: l4, count: 8, allowRotate: true, allowMirror: false }]
+      });
+      expect('关镜像后 0 件镜像朝向', mirrorOff.placedMirrored === 0,
+        'mirrored=' + mirrorOff.placedMirrored + ' 明细=' + mirrorOff.placements.map(function (p) { return p.orientText; }).join('/'));
+
+      var mirrorOn = SolverApi.solve({
+        size: 5, unlocked: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
+        mode: 'exact', timeLimit: 3000,
+        types: [{ name: 'L4', cells: l4, count: 8, allowRotate: true, allowMirror: true }]
+      });
+      expect('开镜像时会出现镜像朝向', mirrorOn.placedMirrored > 0, 'mirrored=' + mirrorOn.placedMirrored);
+
+      var noRotate = SolverApi.solve({
+        size: 5, unlocked: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
+        mode: 'exact', timeLimit: 3000,
+        types: [{ name: 'L4', cells: l4, count: 8, allowRotate: false, allowMirror: false }]
+      });
+      expect('关旋转关镜像后全部是原朝向',
+        noRotate.placements.every(function (p) { return p.orientText === '原朝向'; }),
+        JSON.stringify(noRotate.placements.map(function (p) { return p.orientText; })));
+
+      expect('非手性形状（3 格 L）开/关镜像朝向数一致',
+        P0.transforms([[0, 0], [0, 1], [1, 1]], true).length ===
+        P0.transforms([[0, 0], [0, 1], [1, 1]], false).length);
+
+      /* ---- 新加入的物品应沿用全局开关 ---- */
+      var raEl = $('allowRotate'), amEl = $('allowMirror');
+      expect('有「允许旋转」开关', !!raEl);
+      expect('「允许旋转」默认勾选', !raEl || raEl.checked === true);
+      if (amEl) {
+        amEl.checked = false;
+        amEl.dispatchEvent(new Event('change', { bubbles: true }));
+        expect('关掉全局镜像后，已有物品也变成不可镜像',
+          App.state.types.every(function (t) { return t.allowMirror === false; }));
+        var beforeAdd = App.state.types.length;
+        $('addL').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect('新增物品沿用全局镜像开关',
+          App.state.types.length === beforeAdd + 1 &&
+          App.state.types[App.state.types.length - 1].allowMirror === false,
+          'new allowMirror=' + App.state.types[App.state.types.length - 1].allowMirror);
+        amEl.checked = true;
+        amEl.dispatchEvent(new Event('change', { bubbles: true }));
+        expect('重新打开全局镜像后全部恢复',
+          App.state.types.every(function (t) { return t.allowMirror === true; }));
+      }
 
       /* ---- 错误分支：没有物品时给提示 ---- */
       var saved = App.state.types.slice();

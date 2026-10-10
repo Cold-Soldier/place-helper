@@ -278,6 +278,7 @@ pre.plan {
       <section class="sec">
         <h2>3 · 物品清单 <span class="count-badge" id="typeCount">0 种</span></h2>
         <div id="typeList"></div>
+        <div class="hint">每行右侧的「可旋转 / 可镜像」可以单独控制这一种物品的摆放自由度。</div>
         <div class="row">
           <button id="addRect" class="mini">+ 矩形…</button>
           <button id="clearTypes" class="mini ghost">清空清单</button>
@@ -309,7 +310,17 @@ pre.plan {
               <option value="15000">15 秒</option>
             </select>
           </label>
+          <label class="f"><input type="checkbox" id="allowRotate" checked> 允许旋转</label>
           <label class="f"><input type="checkbox" id="allowMirror" checked> 允许镜像翻转</label>
+        </div>
+        <div class="hint">
+          关掉「允许旋转」= 只能按你画出来的方向摆；关掉「允许镜像翻转」= 只能用旋转能达到的方向。
+        </div>
+        <div class="hint">
+          注意：<b>2×2、1×2、3 格 L</b> 这类形状的镜像本来就等于它的某个旋转，
+          所以对它们关掉镜像看不出区别（本来也不存在“被镜像”这回事）；
+          <b>4 格 L、S/Z 形</b>才是手性的，关掉镜像才真正少一半朝向。
+          结果区会标出每件物品的实际朝向，可以自己核对。
         </div>
         <div class="row">
           <button id="solveBtn" class="primary big">开始求解</button>
@@ -420,28 +431,77 @@ pre.plan {
   }
 
   /**
-   * 生成一个形状的所有摆放方向。
+   * 生成一个形状的所有可摆放朝向。
    * @param {number[][]} cells 形状格子
-   * @param {boolean} allowMirror 是否允许镜像（L 形默认允许，可严格只用旋转）
-   * @returns {{cells:number[][], key:string, allowMirror:boolean}[]}
+   * @param {boolean|{rotate?:boolean, mirror?:boolean}} opts
+   *        传布尔值时表示“是否允许镜像”（兼容旧写法）；
+   *        传对象时可分别控制 rotate（是否允许旋转，默认 true）与 mirror（是否允许镜像，默认 true）。
+   * @returns {{cells:number[][], key:string, rot:number, mirrored:boolean, allowMirror:boolean}[]}
    */
-  function transforms(cells, allowMirror) {
+  function transforms(cells, opts) {
     var base = normalize(cells);
     if (base.length === 0) return [];
+
+    var allowRotate = true, allowMirror = true;
+    if (typeof opts === 'boolean') allowMirror = opts;
+    else if (opts && typeof opts === 'object') {
+      allowMirror = opts.mirror !== false;
+      allowRotate = opts.rotate !== false;
+    } else if (opts === false) allowMirror = false;
+
     var seen = Object.create(null), out = [];
     var variants = allowMirror ? [base, mirrorH(base)] : [base];
     for (var v = 0; v < variants.length; v++) {
       var cur = variants[v];
-      for (var r = 0; r < 4; r++) {
+      var rounds = allowRotate ? 4 : 1;
+      for (var r = 0; r < rounds; r++) {
         var k = key(cur);
         if (!seen[k]) {
           seen[k] = 1;
-          out.push({ cells: cur, key: k, allowMirror: !!allowMirror });
+          // 标签按「能否只用旋转达到」来判定：非手性形状的镜像会标成旋转（这是准确的）
+          var ori = orientationOf(cur, base) || { rot: r, mirrored: v > 0 };
+          out.push({
+            cells: cur,
+            key: k,
+            rot: ori.rot,
+            mirrored: ori.mirrored,
+            allowMirror: !!allowMirror
+          });
         }
         cur = rotate(cur);
       }
     }
     return out;
+  }
+
+  /**
+   * 判断某个朝向相对原始形状是「转了几度」还是「必须镜像」。
+   * 优先匹配旋转：只有旋转做不到时才算镜像。
+   * @returns {{rot:number, mirrored:boolean}|null} rot = 顺时针 90° 的次数（0~3）
+   */
+  function orientationOf(cells, baseCells) {
+    var target = normalize(cells);
+    var base = normalize(baseCells);
+    if (!target.length || !base.length) return null;
+    var tk = key(target);
+    var cur = base;
+    for (var r = 0; r < 4; r++) {
+      if (key(cur) === tk) return { rot: r, mirrored: false };
+      cur = rotate(cur);
+    }
+    cur = mirrorH(base);
+    for (var r2 = 0; r2 < 4; r2++) {
+      if (key(cur) === tk) return { rot: r2, mirrored: true };
+      cur = rotate(cur);
+    }
+    return null;
+  }
+
+  /** 把朝向变成人能读的文字，例如「原朝向」「顺时针 180°」「镜像」 */
+  function describeOrientation(ori) {
+    if (!ori) return '未知朝向';
+    var turn = ['原朝向', '顺时针 90°', '顺时针 180°', '顺时针 270°'][ori.rot] || ('旋转 ' + ori.rot + '×90°');
+    return ori.mirrored ? (ori.rot === 0 ? '镜像' : '镜像 + ' + turn) : turn;
   }
 
   /** 形状面积（格子数） */
@@ -533,6 +593,8 @@ pre.plan {
     rotate: rotate,
     mirrorH: mirrorH,
     transforms: transforms,
+    orientationOf: orientationOf,
+    describeOrientation: describeOrientation,
     bounds: bounds,
     area: area,
     isSquare: isSquare,
@@ -650,7 +712,11 @@ pre.plan {
       var count = Math.max(0, t.count | 0);
       if (count === 0 || !t.cells || !t.cells.length) continue;
       var base = P.normalize(t.cells);
-      var trs = P.transforms(base, t.allowMirror !== false);
+      // allowRotate / allowMirror 可分别控制；只传 allowMirror 时行为与旧版一致
+      var trs = P.transforms(base, {
+        rotate: t.allowRotate !== false,
+        mirror: t.allowMirror !== false
+      });
       if (!trs.length) continue;
       var maxRun = 0;
       for (var k = 0; k < trs.length; k++) maxRun = Math.max(maxRun, longestRun(trs[k].cells));
@@ -664,7 +730,9 @@ pre.plan {
         cells: base,
         trs: trs,
         count: count,
-        maxRun: maxRun
+        maxRun: maxRun,
+        allowRotate: t.allowRotate !== false,
+        allowMirror: t.allowMirror !== false
       });
     }
     if (!types.length) return { ok: false, error: '请先添加至少一种物品' };
@@ -999,15 +1067,24 @@ pre.plan {
     function buildResult(types2, availCells, total, unlockedCount, sol) {
       var placedByType = types2.map(function () { return 0; });
       var outPl = [];
+      var mirroredUsed = 0, rotatedUsed = 0;
       for (var i2 = 0; i2 < sol.placements.length; i2++) {
         var p = sol.placements[i2];
         placedByType[p.t]++;
+        // 记录这件物品实际用的朝向：是原样、转了多少度、还是必须镜像
+        var ori = P.orientationOf(p.cells, types2[p.t].cells);
+        if (ori) {
+          if (ori.mirrored) mirroredUsed++;
+          else if (ori.rot !== 0) rotatedUsed++;
+        }
         outPl.push({
           typeIndex: p.t,
           id: types2[p.t].id,
           name: types2[p.t].name,
           area: types2[p.t].area,
-          cells: p.cells
+          cells: p.cells,
+          orient: ori,
+          orientText: ori ? P.describeOrientation(ori) : ''
         });
       }
       var leftover = [];
@@ -1035,9 +1112,14 @@ pre.plan {
         leftoverArea: Math.max(0, availCells - placedArea),
         utilization: availCells > 0 ? placedArea / availCells : 0,
         boardFill: total > 0 ? placedArea / total : 0,
+        placedMirrored: mirroredUsed,     // 用了「必须镜像」朝向的件数
+        placedRotated: rotatedUsed,       // 只用旋转就摆下的件数
         placements: outPl,
         types: types2.map(function (t2) {
-          return { id: t2.id, name: t2.name, area: t2.area, count: t2.count, cells: t2.cells };
+          return {
+            id: t2.id, name: t2.name, area: t2.area, count: t2.count, cells: t2.cells,
+            allowRotate: t2.allowRotate !== false, allowMirror: t2.allowMirror !== false
+          };
         }),
         stats: { nodes: sol.nodes, ms: Math.round(sol.ms) }
       };
@@ -1066,7 +1148,7 @@ pre.plan {
     var $ = function (id) { return document.getElementById(id); };
 
     try {
-      var App = window.GridApp, SolverApi = window.Solver;
+      var App = window.GridApp, SolverApi = window.Solver, P0 = window.Pieces;
       if (!App) throw new Error('window.GridApp 不存在（app.js 没加载成功？）');
 
       /* ---- 默认状态 ---- */
@@ -1168,6 +1250,60 @@ pre.plan {
       var txt = App.planText(res, App.state.types, App.unlockedList());
       expect('方案文本以标题开头', txt.indexOf('格子摆放方案') === 0);
       expect('方案文本含行数', txt.split('\n').length > s, 'lines=' + txt.split('\n').length);
+      expect('方案文本含朝向统计', txt.indexOf('朝向统计') > 0);
+      expect('结果里每件物品带朝向标签', res.placements.every(function (p) { return !!p.orientText; }),
+        JSON.stringify(res.placements.map(function (p) { return p.orientText; })));
+
+      /* ---- 朝向开关：关掉镜像后不允许出现「必须镜像」的朝向 ---- */
+      var l4 = P0.lShape(3, 2);                 // 4 格 L 是手性形状，能真正体现镜像开关
+      var mirrorOff = SolverApi.solve({
+        size: 5, unlocked: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
+        mode: 'exact', timeLimit: 3000,
+        types: [{ name: 'L4', cells: l4, count: 8, allowRotate: true, allowMirror: false }]
+      });
+      expect('关镜像后 0 件镜像朝向', mirrorOff.placedMirrored === 0,
+        'mirrored=' + mirrorOff.placedMirrored + ' 明细=' + mirrorOff.placements.map(function (p) { return p.orientText; }).join('/'));
+
+      var mirrorOn = SolverApi.solve({
+        size: 5, unlocked: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
+        mode: 'exact', timeLimit: 3000,
+        types: [{ name: 'L4', cells: l4, count: 8, allowRotate: true, allowMirror: true }]
+      });
+      expect('开镜像时会出现镜像朝向', mirrorOn.placedMirrored > 0, 'mirrored=' + mirrorOn.placedMirrored);
+
+      var noRotate = SolverApi.solve({
+        size: 5, unlocked: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
+        mode: 'exact', timeLimit: 3000,
+        types: [{ name: 'L4', cells: l4, count: 8, allowRotate: false, allowMirror: false }]
+      });
+      expect('关旋转关镜像后全部是原朝向',
+        noRotate.placements.every(function (p) { return p.orientText === '原朝向'; }),
+        JSON.stringify(noRotate.placements.map(function (p) { return p.orientText; })));
+
+      expect('非手性形状（3 格 L）开/关镜像朝向数一致',
+        P0.transforms([[0, 0], [0, 1], [1, 1]], true).length ===
+        P0.transforms([[0, 0], [0, 1], [1, 1]], false).length);
+
+      /* ---- 新加入的物品应沿用全局开关 ---- */
+      var raEl = $('allowRotate'), amEl = $('allowMirror');
+      expect('有「允许旋转」开关', !!raEl);
+      expect('「允许旋转」默认勾选', !raEl || raEl.checked === true);
+      if (amEl) {
+        amEl.checked = false;
+        amEl.dispatchEvent(new Event('change', { bubbles: true }));
+        expect('关掉全局镜像后，已有物品也变成不可镜像',
+          App.state.types.every(function (t) { return t.allowMirror === false; }));
+        var beforeAdd = App.state.types.length;
+        $('addL').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect('新增物品沿用全局镜像开关',
+          App.state.types.length === beforeAdd + 1 &&
+          App.state.types[App.state.types.length - 1].allowMirror === false,
+          'new allowMirror=' + App.state.types[App.state.types.length - 1].allowMirror);
+        amEl.checked = true;
+        amEl.dispatchEvent(new Event('change', { bubbles: true }));
+        expect('重新打开全局镜像后全部恢复',
+          App.state.types.every(function (t) { return t.allowMirror === true; }));
+      }
 
       /* ---- 错误分支：没有物品时给提示 ---- */
       var saved = App.state.types.slice();
@@ -1212,9 +1348,10 @@ pre.plan {
   var state = {
     size: 6,
     locked: [],                 // 未解锁格索引
-    types: [],                  // {id,name,color,cells:[[r,c]],count,allowMirror}
+    types: [],                  // {id,name,color,cells:[[r,c]],count,allowRotate,allowMirror}
     solveMode: 'exact',
     timeLimit: 4000,
+    allowRotate: true,          // 全局：新加入物品与批量设置的默认值
     allowMirror: true,
     draw: []                    // 画布选中的格子
   };
@@ -1366,7 +1503,9 @@ pre.plan {
       color: nextColor(),
       cells: n,
       count: 1,
-      allowMirror: true
+      // 新加入的物品沿用当前的全局开关，避免“关了镜像新形状却还能翻”的困惑
+      allowRotate: state.allowRotate !== false,
+      allowMirror: state.allowMirror !== false
     });
     renderTypes(); save(); refreshStats();
   }
@@ -1436,19 +1575,34 @@ pre.plan {
       txt.textContent = P.describe(t.cells);
       desc.appendChild(txt);
 
-      var mir = document.createElement('label');
-      mir.className = 'f';
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = t.allowMirror !== false;
-      cb.addEventListener('change', function () { t.allowMirror = cb.checked; save(); refreshStats(); });
-      mir.appendChild(cb);
-      mir.appendChild(document.createTextNode('可镜像'));
-      desc.appendChild(mir);
+      // 每件物品可以单独决定：能不能转、能不能镜像
+      desc.appendChild(makeFlag('可旋转', 'rotate', t.allowRotate !== false, function (on) {
+        t.allowRotate = on; save(); refreshStats();
+      }));
+      desc.appendChild(makeFlag('可镜像', 'mirror', t.allowMirror !== false, function (on) {
+        t.allowMirror = on; save(); refreshStats();
+      }));
       row.appendChild(desc);
 
       typeListEl.appendChild(row);
     });
+  }
+
+  /** 生成一个「可旋转 / 可镜像」勾选项 */
+  function makeFlag(labelText, kind, checked, onChange) {
+    var lab = document.createElement('label');
+    lab.className = 'f';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'flag-' + kind;
+    cb.checked = checked;
+    cb.title = kind === 'rotate'
+      ? '允许这件物品旋转摆放；关掉后只能用它原本画出来的方向'
+      : '允许这件物品镜像翻转摆放；关掉后只能用旋转能达到的方向';
+    cb.addEventListener('change', function () { onChange(cb.checked); });
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(labelText));
+    return lab;
   }
 
   $('addRect').addEventListener('click', function () {
@@ -1491,7 +1645,8 @@ pre.plan {
   function serialize() {
     return {
       v: 1, size: state.size, locked: state.locked, types: state.types,
-      solveMode: state.solveMode, timeLimit: state.timeLimit, allowMirror: state.allowMirror
+      solveMode: state.solveMode, timeLimit: state.timeLimit,
+      allowRotate: state.allowRotate, allowMirror: state.allowMirror
     };
   }
   function applyData(data, keepDraw) {
@@ -1507,11 +1662,13 @@ pre.plan {
         color: /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : nextColor(),
         cells: normCells(t.cells || []),
         count: Math.max(0, Math.min(999, parseInt(t.count, 10) || 0)),
+        allowRotate: t.allowRotate !== false,
         allowMirror: t.allowMirror !== false
       };
     }).filter(function (t) { return t.cells.length; }) : [];
     if (data.solveMode === 'beam' || data.solveMode === 'exact') state.solveMode = data.solveMode;
     if (data.timeLimit) state.timeLimit = data.timeLimit;
+    if (typeof data.allowRotate === 'boolean') state.allowRotate = data.allowRotate;
     if (typeof data.allowMirror === 'boolean') state.allowMirror = data.allowMirror;
     if (!keepDraw) state.draw = [];
     return true;
@@ -1527,11 +1684,12 @@ pre.plan {
     state.locked = defaultLocked(6);
     // 默认配置正好能铺满初始解锁的中心 4×4（16 格）
     state.types = [
-      { id: uid(), name: '2×2', color: PALETTE[0], cells: P.rect(2, 2), count: 6, allowMirror: true },
-      { id: uid(), name: '1×2', color: PALETTE[1], cells: P.rect(2, 1), count: 2, allowMirror: true }
+      { id: uid(), name: '2×2', color: PALETTE[0], cells: P.rect(2, 2), count: 6, allowRotate: true, allowMirror: true },
+      { id: uid(), name: '1×2', color: PALETTE[1], cells: P.rect(2, 1), count: 2, allowRotate: true, allowMirror: true }
     ];
     state.solveMode = 'exact';
     state.timeLimit = 4000;
+    state.allowRotate = true;
     state.allowMirror = true;
     state.draw = [];
   }
@@ -1562,6 +1720,8 @@ pre.plan {
     $('boardSize').value = String(state.size);
     $('solveMode').value = state.solveMode;
     $('timeLimit').value = String(state.timeLimit);
+    var ra = $('allowRotate');
+    if (ra) ra.checked = state.allowRotate !== false;
     $('allowMirror').checked = !!state.allowMirror;
   }
   $('boardSize').addEventListener('change', function () {
@@ -1589,6 +1749,11 @@ pre.plan {
   });
   $('solveMode').addEventListener('change', function () { state.solveMode = this.value; save(); });
   $('timeLimit').addEventListener('change', function () { state.timeLimit = parseInt(this.value, 10); save(); });
+  $('allowRotate').addEventListener('change', function () {
+    state.allowRotate = this.checked;
+    state.types.forEach(function (t) { t.allowRotate = state.allowRotate; });
+    renderTypes(); save();
+  });
   $('allowMirror').addEventListener('change', function () {
     state.allowMirror = this.checked;
     state.types.forEach(function (t) { t.allowMirror = state.allowMirror; });
@@ -1649,7 +1814,11 @@ pre.plan {
           mode: state.solveMode,
           timeLimit: state.timeLimit,
           types: types.map(function (t) {
-            return { id: t.id, name: t.name, cells: t.cells, count: t.count, allowMirror: t.allowMirror !== false };
+            return {
+              id: t.id, name: t.name, cells: t.cells, count: t.count,
+              allowRotate: t.allowRotate !== false,
+              allowMirror: t.allowMirror !== false
+            };
           })
         });
       } catch (e) {
@@ -1696,6 +1865,15 @@ pre.plan {
     else badge('当前找到的最好方案', 'warn');
     badge(res.method === 'exact' ? '精确搜索' : (res.method === 'beam' ? '快速启发式' : '精确搜索超时→启发式'));
     badge('搜索节点 ' + res.stats.nodes + ' · ' + ms + 'ms');
+    // 朝向统计：让人一眼看出「有没有用到镜像朝向」
+    var anyMirrorOff = types.some(function (t) { return t.allowMirror === false; });
+    var anyRotateOff = types.some(function (t) { return t.allowRotate === false; });
+    if (res.placedMirrored > 0) {
+      badge('其中 ' + res.placedMirrored + ' 件用了镜像朝向', 'warn');
+    } else if (anyMirrorOff) {
+      badge('全部只用旋转/原朝向（0 件镜像）', 'ok');
+    }
+    if (anyRotateOff) badge('已限制旋转', 'info');
     area.appendChild(head);
 
     /* --- 摆放图 --- */
@@ -1734,13 +1912,17 @@ pre.plan {
     }
     area.appendChild(grid);
 
-    /* --- 物品明细 --- */
+    /* --- 物品明细（含每件物品实际用的朝向） --- */
     var list = document.createElement('div');
     list.className = 'res-pieces';
-    var placedCount = {};
-    res.placements.forEach(function (p) { placedCount[p.id] = (placedCount[p.id] || 0) + 1; });
-    types.forEach(function (t, i) {
-      var put = placedCount[t.id] || 0;
+    var placedByType = {}, orientByType = {};
+    res.placements.forEach(function (p) {
+      placedByType[p.id] = (placedByType[p.id] || 0) + 1;
+      (orientByType[p.id] = orientByType[p.id] || {})[p.orientText || '未知朝向'] =
+        ((orientByType[p.id] || {})[p.orientText || '未知朝向'] || 0) + 1;
+    });
+    types.forEach(function (t) {
+      var put = placedByType[t.id] || 0;
       if (!put) return;
       var d = document.createElement('div');
       d.className = 'res-piece';
@@ -1755,6 +1937,16 @@ pre.plan {
       n.className = 'n';
       n.textContent = '× ' + put + (put < t.count ? '（' + t.count + ' 中放不下 ' + (t.count - put) + '）' : '');
       d.appendChild(n);
+      // 朝向明细：例如「顺时针 180° ×2 · 原朝向 ×1」
+      var ori = orientByType[t.id] || {};
+      var oriTxt = Object.keys(ori).map(function (k) { return k + ' ×' + ori[k]; }).join(' · ');
+      if (oriTxt) {
+        var os = document.createElement('span');
+        os.className = 'n orient';
+        os.textContent = oriTxt;
+        os.title = '这件物品实际摆放时用的朝向';
+        d.appendChild(os);
+      }
       list.appendChild(d);
     });
     area.appendChild(list);
@@ -1801,6 +1993,9 @@ pre.plan {
     lines.push('填入 ' + res.placedArea + '/' + res.availableCells + ' 格（' +
       Math.round(res.utilization * 100) + '%），' +
       (res.optimalProven ? '已证明最优' : (res.optimal ? '最优（全填满）' : '当前找到的最好方案')));
+    lines.push('朝向统计：镜像朝向 ' + (res.placedMirrored || 0) + ' 件，' +
+      '纯旋转 ' + (res.placedRotated || 0) + ' 件，' +
+      '原朝向 ' + Math.max(0, res.placedCount - (res.placedMirrored || 0) - (res.placedRotated || 0)) + ' 件');
     lines.push('');
     for (var r2 = 0; r2 < size; r2++) {
       var s = [];
@@ -1810,7 +2005,8 @@ pre.plan {
     lines.push('');
     res.placements.forEach(function (pl, idx) {
       var ch = idx < chars.length ? chars[idx] : '?';
-      lines.push(ch + '  ' + pl.name + '  左上角 (' + (pl.cells[0][0] + 1) + ',' + (pl.cells[0][1] + 1) + ')');
+      lines.push(ch + '  ' + pl.name + '  左上角 (' + (pl.cells[0][0] + 1) + ',' + (pl.cells[0][1] + 1) + ')' +
+        (pl.orientText ? '  [' + pl.orientText + ']' : ''));
     });
     if (res.leftover.length) {
       lines.push('');
@@ -1857,7 +2053,13 @@ pre.plan {
         unlocked: unlockedList(),
         mode: state.solveMode,
         timeLimit: state.timeLimit,
-        types: state.types.filter(function (t) { return t.count > 0; })
+        types: state.types.filter(function (t) { return t.count > 0; }).map(function (t) {
+          return {
+            id: t.id, name: t.name, cells: t.cells, count: t.count,
+            allowRotate: t.allowRotate !== false,
+            allowMirror: t.allowMirror !== false
+          };
+        })
       });
     }
   };
